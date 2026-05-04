@@ -1,4 +1,4 @@
-const { anthropic, HAS_API_KEY, buildDiagnosisPrompt, DEMO_DIAGNOSIS } = require('./_helpers')
+const { geminiGenerate, HAS_API_KEY, buildDiagnosisPrompt, DEMO_DIAGNOSIS, stripJson } = require('./_helpers')
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -18,16 +18,14 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const message = await anthropic.messages.create({
-      model: 'claude-opus-4-6',
-      max_tokens: 800,
-      messages: [{ role: 'user', content: buildDiagnosisPrompt(propertyData, element, issue) }],
-    })
-    const text = message.content[0].text.trim()
-    const clean = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim()
-    res.json({ diagnosis: JSON.parse(clean), source: 'claude' })
+    const text = await geminiGenerate(buildDiagnosisPrompt(propertyData, element, issue))
+    const diagnosis = JSON.parse(stripJson(text))
+    res.json({ diagnosis, source: 'gemini' })
   } catch (err) {
     console.error('[diagnose]', err.message)
-    res.status(500).json({ error: 'AI unavailable' })
+    res.json({
+      diagnosis: DEMO_DIAGNOSIS(element.name, issue, propertyData?.address),
+      source: 'fallback',
+    })
   }
 }

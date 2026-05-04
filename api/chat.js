@@ -1,4 +1,4 @@
-const { anthropic, HAS_API_KEY, getDemoChatReply, buildChatSystem } = require('./_helpers')
+const { geminiChat, HAS_API_KEY, getDemoChatReply, buildChatSystem } = require('./_helpers')
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -11,21 +11,15 @@ module.exports = async (req, res) => {
   if (!messages || !element) return res.status(400).json({ error: 'messages and element required' })
 
   if (!HAS_API_KEY) {
-    // Pass the full messages array so the demo can read the actual question
-    return res.json({ reply: getDemoChatReply(messages, element) })
+    return res.json({ reply: getDemoChatReply(messages, element), source: 'demo' })
   }
 
   try {
-    const message = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 600,
-      system: buildChatSystem(propertyData, element),
-      messages: messages.map(m => ({ role: m.role, content: m.content })),
-    })
-    res.json({ reply: message.content[0].text })
+    const reply = await geminiChat(buildChatSystem(propertyData, element), messages)
+    res.json({ reply, source: 'gemini' })
   } catch (err) {
     console.error('[chat]', err.message)
-    // Fall back to demo if Claude fails
-    res.json({ reply: getDemoChatReply(messages, element) })
+    // Graceful fallback so the demo still works
+    res.json({ reply: getDemoChatReply(messages, element), source: 'fallback' })
   }
 }

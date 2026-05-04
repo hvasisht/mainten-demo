@@ -1,16 +1,37 @@
 require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
-const Anthropic = require('@anthropic-ai/sdk')
+const { GoogleGenerativeAI } = require('@google/generative-ai')
 const { getPropertyData } = require('./src/bostonData')
 
 const app = express()
 app.use(cors())
 app.use(express.json())
 
-const RAW_KEY = process.env.ANTHROPIC_API_KEY || ''
-const HAS_API_KEY = RAW_KEY.length > 10 && !RAW_KEY.startsWith('your_')
-const anthropic = new Anthropic({ apiKey: RAW_KEY })
+const GEMINI_KEY = process.env.GEMINI_API_KEY || ''
+const HAS_API_KEY = GEMINI_KEY.length > 10 && !GEMINI_KEY.startsWith('your_')
+const genAI = HAS_API_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null
+
+async function geminiGenerate(prompt) {
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+  const result = await model.generateContent(prompt)
+  return result.response.text().trim()
+}
+
+async function geminiChat(systemInstruction, messages) {
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash', systemInstruction })
+  const history = messages.slice(0, -1).map(m => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }))
+  const chat = model.startChat({ history })
+  const result = await chat.sendMessage(messages[messages.length - 1].content)
+  return result.response.text().trim()
+}
+
+function stripJson(text) {
+  return text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim()
+}
 
 // ──────────────────────────────────────────────────────────────
 //  DEMO CACHE — pre-computed fallback for a Cambridge address
@@ -260,19 +281,11 @@ app.post('/api/insights', async (req, res) => {
   }
 
   try {
-    const prompt = buildInsightPrompt(propertyData)
-    const message = await anthropic.messages.create({
-      model: 'claude-opus-4-6',
-      max_tokens: 1500,
-      messages: [{ role: 'user', content: prompt }],
-    })
-    const text = message.content[0].text.trim()
-    // Strip markdown code fences if present
-    const clean = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim()
-    const insights = JSON.parse(clean)
-    res.json({ insights, source: 'claude' })
+    const text = await geminiGenerate(buildInsightPrompt(propertyData))
+    const insights = JSON.parse(stripJson(text))
+    res.json({ insights, source: 'gemini' })
   } catch (err) {
-    console.error('[insights] Claude error — falling back to demo:', err.message)
+    console.error('[insights] Gemini error — falling back to demo:', err.message)
     res.json({ insights: DEMO_INSIGHTS, source: 'fallback' })
   }
 })
@@ -344,16 +357,10 @@ app.post('/api/chat', async (req, res) => {
   }
 
   try {
-    const systemPrompt = buildChatSystemPrompt(propertyData, element)
-    const message = await anthropic.messages.create({
-      model: 'claude-opus-4-6',
-      max_tokens: 600,
-      system: systemPrompt,
-      messages: messages.map(m => ({ role: m.role, content: m.content })),
-    })
-    res.json({ reply: message.content[0].text })
+    const reply = await geminiChat(buildChatSystemPrompt(propertyData, element), messages)
+    res.json({ reply, source: 'gemini' })
   } catch (err) {
-    console.error('[chat] Claude error:', err.message)
+    console.error('[chat] Gemini error:', err.message)
     res.status(500).json({ error: 'AI unavailable' })
   }
 })
@@ -402,16 +409,10 @@ Answer with a JSON object ONLY, no markdown:
 }
 
 YES = they can do it freely. CAUTION = they can but with specific care. NO = they should not / need landlord permission. INFO = informational, no clear yes/no.`
-    const message = await anthropic.messages.create({
-      model: 'claude-opus-4-6',
-      max_tokens: 300,
-      messages: [{ role: 'user', content: prompt }],
-    })
-    const text = message.content[0].text.trim()
-    const clean = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim()
-    res.json(JSON.parse(clean))
+    const text = await geminiGenerate(prompt)
+    res.json(JSON.parse(stripJson(text)))
   } catch (err) {
-    console.error('[cani] Claude error — using demo:', err.message)
+    console.error('[cani] Gemini error — using demo:', err.message)
     res.json(getDemoAnswer(question))
   }
 })
@@ -440,18 +441,11 @@ app.post('/api/diagnose', async (req, res) => {
   }
 
   try {
-    const prompt = buildDiagnosisPrompt(propertyData, element, issue)
-    const message = await anthropic.messages.create({
-      model: 'claude-opus-4-6',
-      max_tokens: 800,
-      messages: [{ role: 'user', content: prompt }],
-    })
-    const text = message.content[0].text.trim()
-    const clean = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim()
-    const diagnosis = JSON.parse(clean)
-    res.json({ diagnosis, source: 'claude' })
+    const text = await geminiGenerate(buildDiagnosisPrompt(propertyData, element, issue))
+    const diagnosis = JSON.parse(stripJson(text))
+    res.json({ diagnosis, source: 'gemini' })
   } catch (err) {
-    console.error('[diagnose] Claude error:', err.message)
+    console.error('[diagnose] Gemini error:', err.message)
     res.status(500).json({ error: 'AI unavailable' })
   }
 })

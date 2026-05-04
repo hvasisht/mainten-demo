@@ -193,11 +193,20 @@ export default function ChatPanel({ element, propertyData, visible, onClose, onR
             fontFamily: 'Georgia, serif', fontSize: 13,
             color: colors.warmWhite, lineHeight: 1.2,
           }}>{element?.name}</div>
-          <div style={{
-            fontFamily: 'ui-monospace, monospace', fontSize: 8,
-            color: colors.gunmetal, letterSpacing: '0.08em',
-            marginTop: 2,
-          }}>AI PROPERTY ADVISOR</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
+            <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 8, color: colors.gunmetal, letterSpacing: '0.08em' }}>AI PROPERTY ADVISOR</span>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 3,
+              background: 'rgba(66,133,244,0.12)',
+              border: '1px solid rgba(66,133,244,0.35)',
+              borderRadius: 3, padding: '1px 4px',
+            }}>
+              <svg width="7" height="7" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2L9.5 9.5H2L7.5 14L5.5 21L12 17L18.5 21L16.5 14L22 9.5H14.5L12 2Z" fill="#4285F4"/>
+              </svg>
+              <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 6, color: 'rgba(66,133,244,0.9)', letterSpacing: '0.06em' }}>Gemini</span>
+            </div>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           {onReportIssue && (

@@ -1,4 +1,4 @@
-const { anthropic, HAS_API_KEY, DEMO_INSIGHTS, buildInsightPrompt } = require('./_helpers')
+const { geminiGenerate, HAS_API_KEY, DEMO_INSIGHTS, buildInsightPrompt, stripJson } = require('./_helpers')
 
 module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -15,14 +15,9 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const message = await anthropic.messages.create({
-      model: 'claude-opus-4-6',
-      max_tokens: 1500,
-      messages: [{ role: 'user', content: buildInsightPrompt(propertyData) }],
-    })
-    const text = message.content[0].text.trim()
-    const clean = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim()
-    res.json({ insights: JSON.parse(clean), source: 'claude' })
+    const text = await geminiGenerate(buildInsightPrompt(propertyData))
+    const insights = JSON.parse(stripJson(text))
+    res.json({ insights, source: 'gemini' })
   } catch (err) {
     console.error('[insights]', err.message)
     res.json({ insights: DEMO_INSIGHTS, source: 'fallback' })

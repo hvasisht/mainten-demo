@@ -185,12 +185,27 @@ export default function AhaPanel({
       <div style={{ overflowY: 'auto', flex: 1 }}>
         {/* Header */}
         <div style={{ padding: '14px 16px 10px', borderBottom: `1px solid ${colors.gunmetal}44` }}>
-          <div style={{
-            fontFamily: 'ui-monospace, Consolas, monospace',
-            fontSize: 9, letterSpacing: '0.18em',
-            color: colors.amber, textTransform: 'uppercase', marginBottom: 4,
-          }}>
-            Property Intelligence
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <div style={{
+              fontFamily: 'ui-monospace, Consolas, monospace',
+              fontSize: 9, letterSpacing: '0.18em',
+              color: colors.amber, textTransform: 'uppercase',
+            }}>
+              Property Intelligence
+            </div>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              background: 'rgba(66,133,244,0.12)',
+              border: '1px solid rgba(66,133,244,0.35)',
+              borderRadius: 4, padding: '2px 6px',
+            }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
+                <path d="M12 2L9.5 9.5H2L7.5 14L5.5 21L12 17L18.5 21L16.5 14L22 9.5H14.5L12 2Z" fill="#4285F4"/>
+              </svg>
+              <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 7, letterSpacing: '0.08em', color: 'rgba(66,133,244,0.9)' }}>
+                Gemini
+              </span>
+            </div>
           </div>
           <div style={{
             fontFamily: 'Georgia, serif', fontSize: 13,

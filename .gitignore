@@ -6,3 +6,4 @@ frontend/dist/
 .env
 backend/.env
 .DS_Store
+.vercel
