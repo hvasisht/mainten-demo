@@ -1,0 +1,10 @@
+{
+  "name": "mainten",
+  "version": "1.0.0",
+  "description": "Mainten — Keep Your Home at 10",
+  "private": true,
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.36.3",
+    "node-fetch": "^2.7.0"
+  }
+}

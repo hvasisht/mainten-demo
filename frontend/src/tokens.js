@@ -1,0 +1,17 @@
+export const colors = {
+  amber:        '#D4920A',
+  amberBright:  '#E8A828',
+  amberLight:   '#F5E0A0',
+  carbon:       '#2A2520',
+  cityDeep:     '#111110',
+  cityMid:      '#2C2C28',
+  gunmetal:     '#545450',
+  concreteBase: '#E8E2D9',
+  concreteWarm: '#DDD7CC',
+  concreteMid:  '#C8C1B4',
+  concreteDark: '#4A4540',
+  warmWhite:    '#F5F0E8',
+  navy:         '#1B3A6B',
+  goodGreen:    '#5A8060',
+  riskOrange:   '#C47020',
+}
