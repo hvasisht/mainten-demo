@@ -144,6 +144,33 @@ async function getPropertyData(address) {
       })),
       summary: summarizePermits(permits),
     },
+    neighbourhood: await getNeighbourhoodStats(
+      primary.YR_BUILT,
+      primary.CITY || (primary['MAIL CS'] || '').split(' ')[0]
+    ),
+  }
+}
+
+async function getNeighbourhoodStats(yearBuilt, neighbourhood) {
+  if (!yearBuilt || !neighbourhood) return null
+  const year = parseInt(yearBuilt)
+  if (isNaN(year) || year < 1700 || year > 2030) return null
+  const hood = neighbourhood.toUpperCase().split(' ')[0]
+  try {
+    const totalSQL = `SELECT COUNT(*) as cnt FROM "${ASSESSOR_RID}" WHERE UPPER("CITY") LIKE '%${hood}%' AND "YR_BUILT" > '1700'`
+    const olderSQL = `SELECT COUNT(*) as cnt FROM "${ASSESSOR_RID}" WHERE UPPER("CITY") LIKE '%${hood}%' AND "YR_BUILT" > '1700' AND "YR_BUILT" < '${year}'`
+    const [tRes, oRes] = await Promise.all([
+      fetch(`${BASE}?sql=${encodeURIComponent(totalSQL)}`).then(r => r.json()),
+      fetch(`${BASE}?sql=${encodeURIComponent(olderSQL)}`).then(r => r.json()),
+    ])
+    const total = parseInt(tRes?.result?.records?.[0]?.cnt || 0)
+    const older = parseInt(oRes?.result?.records?.[0]?.cnt || 0)
+    if (total < 5) return null
+    // "Older than X%" = X% of buildings were built AFTER this one
+    const olderThanPct = Math.round(((total - older) / total) * 100)
+    return { total, older, olderThanPct, neighbourhood }
+  } catch (_) {
+    return null
   }
 }
 

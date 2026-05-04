@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import MapBackground from '../components/MapBackground'
 import SearchBar from '../components/SearchBar'
 import WeatherOverlay from '../components/WeatherOverlay'
@@ -7,6 +7,7 @@ import OnboardingOverlay from '../components/OnboardingOverlay'
 import TripleDeckerMap from '../components/TripleDeckerMap'
 import ChatPanel from '../components/ChatPanel'
 import IssueReporter from '../components/IssueReporter'
+import PropertyDashboard from '../components/PropertyDashboard'
 import useWeather from '../hooks/useWeather'
 import { colors } from '../tokens'
 
@@ -31,6 +32,26 @@ export default function Home() {
   const [issueVisible, setIssueVisible]   = useState(false)
 
   const weather = useWeather()
+
+  // ── Auto-search from ?a= URL param (shareable links) ──
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const sharedAddress = params.get('a')
+    if (!sharedAddress) return
+    // Geocode it via Mapbox to get coords, then trigger the flow
+    const token = import.meta.env.VITE_MAPBOX_TOKEN
+    fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(sharedAddress)}.json?access_token=${token}&country=US&types=address&limit=1`)
+      .then(r => r.json())
+      .then(data => {
+        const feature = data.features?.[0]
+        if (!feature) return
+        const [lng, lat] = feature.center
+        setFlyTo({ lng, lat })
+        setSelectedAddress(feature.place_name)
+        setAppState('insights')
+      })
+      .catch(() => {})
+  }, [])
 
   // ── Address selected from search ──
   const handleAddressSelect = useCallback((feature) => {
@@ -236,6 +257,13 @@ export default function Home() {
         activeElement={activeElement}
         onElementClick={handleElementClick}
         visible={inProfile}
+      />
+
+      {/* ─── PROFILE: PROPERTY DASHBOARD (score + permits + can i? + share) ─── */}
+      <PropertyDashboard
+        address={selectedAddress}
+        propertyData={propertyData}
+        visible={inProfile && !chatVisible}
       />
 
       {/* ─── PROFILE: CHAT PANEL ─── */}

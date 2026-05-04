@@ -241,6 +241,64 @@ app.post('/api/chat', async (req, res) => {
   }
 })
 
+// POST /api/cani
+// Body: { question, propertyData }
+// Returns: { answer, safe }
+app.post('/api/cani', async (req, res) => {
+  const { question, propertyData } = req.body
+  if (!question) return res.status(400).json({ error: 'question required' })
+
+  const DEMO_ANSWERS = {
+    'drill':      { answer: 'Check first. In a pre-war triple-decker, wall cavities run unblocked from basement to roof — wiring, pipes, and gas lines all share that space. Use a stud finder before drilling anywhere. Into studs: safe. Between studs in an exterior wall: always check for knob-and-tube wiring first with a non-contact voltage tester ($15 at any hardware store).', safe: 'CAUTION' },
+    'showerhead': { answer: 'Yes — with one caveat. Turn off the water supply valve first. Galvanised pipe this age can have slightly weakened threads, so hand-tighten then one quarter-turn with pliers only. Do not overtighten. If the fitting looks corroded or the pipe moves when you apply pressure, stop and notify your landlord.', safe: 'YES' },
+    'shelves':    { answer: 'Yes, into studs only. Plaster-over-lath walls in a pre-war building are harder to find studs in than drywall — a magnetic stud finder works better here (finds the nails in the lath). Keep shelf loads under 30lbs per stud anchor. Avoid the party wall (shared with next unit) entirely.', safe: 'YES' },
+    'wear':       { answer: 'Massachusetts law is specific: normal wear and tear is the landlord\'s responsibility, never the tenant\'s. This includes: paint fading or minor scuffs, carpet wear from normal use, minor wall marks, loose door handles, dripping faucets. Document the current condition with timestamped photos.', safe: 'INFO' },
+    'command':    { answer: 'Yes — Command strips work on plaster walls but with limits. Max weight per strip is lower on plaster than drywall (about 60% of the stated max). The critical rule: when removing them, pull the tab STRAIGHT DOWN parallel to the wall, very slowly. Pre-1940 plaster is more brittle than modern surfaces.', safe: 'YES' },
+    'paint':      { answer: 'Check your lease first — most Boston leases require landlord permission for paint. If approved: use a primer designed for lead paint encapsulation (do not sand existing paint). Return walls to original colour before move-out.', safe: 'CAUTION' },
+  }
+  function getDemoAnswer(q) {
+    const ql = q.toLowerCase()
+    if (ql.includes('drill') || ql.includes('hole')) return DEMO_ANSWERS.drill
+    if (ql.includes('shower') || ql.includes('faucet') || ql.includes('tap')) return DEMO_ANSWERS.showerhead
+    if (ql.includes('shelf') || ql.includes('shelv') || ql.includes('hang') || ql.includes('mount')) return DEMO_ANSWERS.shelves
+    if (ql.includes('wear') || ql.includes('damage') || ql.includes('deposit')) return DEMO_ANSWERS.wear
+    if (ql.includes('command') || ql.includes('strip') || ql.includes('adhesive')) return DEMO_ANSWERS.command
+    if (ql.includes('paint') || ql.includes('colour') || ql.includes('color')) return DEMO_ANSWERS.paint
+    return { answer: 'In a pre-war Boston triple-decker, anything involving the building structure or original systems requires landlord notification first. Document what you\'re doing with before-and-after photos.', safe: 'CAUTION' }
+  }
+
+  if (!HAS_API_KEY) return res.json(getDemoAnswer(question))
+
+  try {
+    const a = propertyData?.assessor || {}
+    const prompt = `You are Mainten AI answering a renter's "Can I?" question about their home.
+
+Property: ${propertyData?.address || 'Unknown'}, built ${a.yearBuilt || 'unknown'}
+Type: ${a.luDesc || 'Residential'} · Heat: ${a.heatType || 'Unknown'}
+
+Question: "${question}"
+
+Answer with a JSON object ONLY, no markdown:
+{
+  "answer": "Direct practical answer in 3-5 sentences. Specific to this property's age and construction. Include any safety precautions or steps needed.",
+  "safe": "YES | NO | CAUTION | INFO"
+}
+
+YES = they can do it freely. CAUTION = they can but with specific care. NO = they should not / need landlord permission. INFO = informational, no clear yes/no.`
+    const message = await anthropic.messages.create({
+      model: 'claude-opus-4-6',
+      max_tokens: 300,
+      messages: [{ role: 'user', content: prompt }],
+    })
+    const text = message.content[0].text.trim()
+    const clean = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim()
+    res.json(JSON.parse(clean))
+  } catch (err) {
+    console.error('[cani] Claude error — using demo:', err.message)
+    res.json(getDemoAnswer(question))
+  }
+})
+
 // POST /api/diagnose
 // Body: { issue, propertyData, element }
 // Returns: { diagnosis }
