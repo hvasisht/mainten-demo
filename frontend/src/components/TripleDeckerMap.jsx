@@ -1,56 +1,57 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { colors } from '../tokens'
 
 // ──────────────────────────────────────────────────────────────
-//  Six elements placed on the triple-decker floor plan
+//  ELEMENTS — each represents a system/area to chat about
 // ──────────────────────────────────────────────────────────────
 export const ELEMENTS = [
   {
     id: 'boiler',
     name: 'Boiler / Heating',
     icon: '🌡',
-    cx: 72, cy: 378,   // basement utility
-    context: 'Steam boiler in basement utility room. Original or replacement cast iron boiler serving all three floors via two-pipe steam radiator system. Pipes run through chase in party wall.',
+    context: 'Steam boiler in basement utility room. Cast iron boiler serving all three floors via two-pipe steam radiator system.',
     riskLevel: 'monitor',
   },
   {
     id: 'electrical',
     name: 'Electrical Panel',
     icon: '⚡',
-    cx: 130, cy: 378,  // basement, near boiler
-    context: 'Main electrical service panel in basement. May have been upgraded (200A service common in renovated units) but original knob-and-tube wiring likely remains in wall cavities throughout the building.',
+    context: 'Main electrical service panel in basement. May have been upgraded but original knob-and-tube wiring likely remains in wall cavities throughout.',
     riskLevel: 'risk',
   },
   {
     id: 'kitchen',
-    name: 'Kitchen Sink / Pipes',
+    name: 'Kitchen',
     icon: '🔧',
-    cx: 80, cy: 250,   // ground floor kitchen (rear)
-    context: 'Kitchen sink with drain stack running through all three floors. Supply lines likely original galvanised iron. Shared plumbing chase connects all three kitchens vertically.',
+    context: 'Kitchen with drain stack running through all three floors. Supply lines likely original galvanised iron. Shared plumbing chase connects all three kitchens vertically.',
     riskLevel: 'risk',
   },
   {
     id: 'bathroom',
     name: 'Bathroom',
     icon: '🚿',
-    cx: 160, cy: 170,  // second floor bathroom
-    context: 'Second floor bathroom directly above ground floor bathroom. Cast iron drain stack (original). Tile and fixtures likely renovated. Check for evidence of past water infiltration to floor below.',
+    context: 'Bathroom above kitchen on each floor. Cast iron drain stack original. Check for evidence of past water infiltration to floor below.',
     riskLevel: 'monitor',
   },
   {
-    id: 'frontwall',
-    name: 'Front Wall',
+    id: 'bedroom',
+    name: 'Bedroom',
+    icon: '🛏',
+    context: 'Bedroom with plaster-over-lath walls. Lead paint assumed present on all original surfaces. Balloon frame — no fire blocking in wall cavities.',
+    riskLevel: 'monitor',
+  },
+  {
+    id: 'living',
+    name: 'Living Room',
     icon: '🏠',
-    cx: 190, cy: 260,  // living room, street-facing
-    context: 'Load-bearing balloon frame front wall. Continuous wall cavity from foundation to roof with no fire blocking — standard 1914 construction. Plaster over lath interior finish. Street-facing exposure.',
+    context: 'Load-bearing balloon frame front wall. Continuous wall cavity from foundation to roof with no fire blocking. Plaster over lath interior finish.',
     riskLevel: 'info',
   },
   {
     id: 'roof',
-    name: 'Roof Access',
+    name: 'Roof',
     icon: '☁',
-    cx: 120, cy: 58,   // top — roof stairwell
-    context: 'Roof access hatch at top of stairwell. Flat or low-slope roof typical of Boston triple-decker. Modified bitumen or tar-and-gravel system. Check permit history for last replacement date.',
+    context: 'Flat or low-slope roof typical of Boston triple-decker. Modified bitumen or tar-and-gravel system. Check permit history for last replacement.',
     riskLevel: 'monitor',
   },
 ]
@@ -61,50 +62,73 @@ const RISK_COLORS = {
   info:    '#5A8060',
 }
 
-function PulsingMarker({ cx, cy, color, active, onClick, label, icon }) {
-  const [tick, setTick] = useState(0)
-  useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 2000)
-    return () => clearInterval(id)
-  }, [])
+// ──────────────────────────────────────────────────────────────
+//  ROOM DEFINITIONS — each maps to an element
+// ──────────────────────────────────────────────────────────────
+const ROOMS = [
+  // Floor 3 (y: 80–170)
+  { id: 'f3_living',  label: 'LIVING',   icon: '🏠', x: 20,  y: 80,  w: 110, h: 45, elementId: 'living'    },
+  { id: 'f3_bed',     label: 'BEDROOM',  icon: '🛏', x: 20,  y: 125, w: 110, h: 45, elementId: 'bedroom'   },
+  { id: 'f3_kitchen', label: 'KITCHEN',  icon: '🔧', x: 130, y: 80,  w: 110, h: 45, elementId: 'kitchen'   },
+  { id: 'f3_bath',    label: 'BATHROOM', icon: '🚿', x: 130, y: 125, w: 110, h: 45, elementId: 'bathroom'  },
+  // Floor 2 (y: 170–260)
+  { id: 'f2_living',  label: 'LIVING',   icon: '🏠', x: 20,  y: 170, w: 110, h: 45, elementId: 'living'    },
+  { id: 'f2_bed',     label: 'BEDROOM',  icon: '🛏', x: 20,  y: 215, w: 110, h: 45, elementId: 'bedroom'   },
+  { id: 'f2_kitchen', label: 'KITCHEN',  icon: '🔧', x: 130, y: 170, w: 110, h: 45, elementId: 'kitchen'   },
+  { id: 'f2_bath',    label: 'BATHROOM', icon: '🚿', x: 130, y: 215, w: 110, h: 45, elementId: 'bathroom'  },
+  // Floor 1 (y: 260–350)
+  { id: 'f1_living',  label: 'LIVING',   icon: '🏠', x: 20,  y: 260, w: 110, h: 45, elementId: 'living'    },
+  { id: 'f1_bed',     label: 'BEDROOM',  icon: '🛏', x: 20,  y: 305, w: 110, h: 45, elementId: 'bedroom'   },
+  { id: 'f1_kitchen', label: 'KITCHEN',  icon: '🔧', x: 130, y: 260, w: 110, h: 45, elementId: 'kitchen'   },
+  { id: 'f1_bath',    label: 'BATHROOM', icon: '🚿', x: 130, y: 305, w: 110, h: 45, elementId: 'bathroom'  },
+  // Basement (y: 350–420)
+  { id: 'b_boiler',   label: 'BOILER',   icon: '🌡', x: 20,  y: 350, w: 105, h: 60, elementId: 'boiler'    },
+  { id: 'b_electric', label: 'ELECTRIC', icon: '⚡', x: 130, y: 350, w: 110, h: 60, elementId: 'electrical'},
+]
 
-  return (
-    <g onClick={onClick} style={{ cursor: 'pointer' }}>
-      {/* Pulse rings */}
-      {!active && (
-        <>
-          <circle cx={cx} cy={cy} r={14} fill="none" stroke={color} strokeWidth={1} opacity={0.25}
-            style={{ animation: `markerPulse ${2 + (cx % 3) * 0.4}s ease-out infinite` }} />
-          <circle cx={cx} cy={cy} r={9} fill="none" stroke={color} strokeWidth={1} opacity={0.4}
-            style={{ animation: `markerPulse ${2 + (cx % 3) * 0.4}s ease-out infinite 0.4s` }} />
-        </>
-      )}
-      {/* Solid dot */}
-      <circle cx={cx} cy={cy} r={active ? 10 : 7}
-        fill={active ? color : `${color}33`}
-        stroke={color}
-        strokeWidth={active ? 2 : 1.5}
-        style={{ transition: 'r 0.2s, fill 0.2s' }}
-      />
-      {/* Icon */}
-      <text x={cx} y={cy + 1} textAnchor="middle" dominantBaseline="middle"
-        style={{ fontSize: active ? 9 : 8, userSelect: 'none', pointerEvents: 'none' }}>
-        {icon}
-      </text>
-      {/* Active glow */}
-      {active && (
-        <circle cx={cx} cy={cy} r={14}
-          fill="none" stroke={color} strokeWidth={1.5} opacity={0.5}
-        />
-      )}
-    </g>
-  )
-}
+const FLOOR_LABELS = [
+  { label: '3F', y: 125 },
+  { label: '2F', y: 215 },
+  { label: '1F', y: 305 },
+  { label: 'B',  y: 380 },
+]
 
 export default function TripleDeckerMap({ address, propertyData, activeElement, onElementClick, visible }) {
+  const [hoveredRoom, setHoveredRoom] = useState(null)
+
   const yearBuilt = propertyData?.assessor?.yearBuilt || '1914'
-  const luDesc = propertyData?.assessor?.luDesc || 'Three-decker'
   const units = propertyData?.units?.count || 3
+
+  function getElement(id) {
+    return ELEMENTS.find(e => e.id === id)
+  }
+
+  function roomColor(room) {
+    const el = getElement(room.elementId)
+    return RISK_COLORS[el?.riskLevel] || colors.gunmetal
+  }
+
+  function isActive(room) {
+    return activeElement?.id === room.elementId
+  }
+
+  function roomFill(room) {
+    const c = roomColor(room)
+    if (isActive(room))           return `${c}2a`
+    if (hoveredRoom === room.id)  return `${c}18`
+    return `${c}08`
+  }
+
+  function roomStroke(room) {
+    const c = roomColor(room)
+    if (isActive(room))           return c
+    if (hoveredRoom === room.id)  return `${c}99`
+    return `${c}33`
+  }
+
+  function roomStrokeWidth(room) {
+    return isActive(room) ? 1.5 : 0.8
+  }
 
   return (
     <div style={{
@@ -118,236 +142,211 @@ export default function TripleDeckerMap({ address, propertyData, activeElement, 
       zIndex: 10,
       width: 280,
     }}>
-      {/* Header */}
+
+      {/* ── Header ── */}
       <div style={{
-        background: 'rgba(14,13,11,0.88)',
+        background: 'rgba(14,13,11,0.90)',
         backdropFilter: 'blur(16px)',
         WebkitBackdropFilter: 'blur(16px)',
         border: `1.5px solid ${colors.gunmetal}`,
         borderBottom: 'none',
         borderRadius: '12px 12px 0 0',
-        padding: '10px 14px 6px',
+        padding: '10px 14px 8px',
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{
-            fontFamily: 'ui-monospace, Consolas, monospace',
-            fontSize: 9, letterSpacing: '0.14em',
-            color: colors.amber, textTransform: 'uppercase',
-          }}>
+          <div style={{ fontFamily: 'ui-monospace, Consolas, monospace', fontSize: 9, letterSpacing: '0.14em', color: colors.amber, textTransform: 'uppercase' }}>
             House Map
           </div>
-          <div style={{
-            fontFamily: 'ui-monospace, Consolas, monospace',
-            fontSize: 8, letterSpacing: '0.08em', color: colors.gunmetal,
-          }}>
+          <div style={{ fontFamily: 'ui-monospace, Consolas, monospace', fontSize: 8, letterSpacing: '0.08em', color: colors.gunmetal }}>
             Built {yearBuilt} · {units === 1 ? '1 unit' : `${units} units`}
           </div>
         </div>
-        <div style={{
-          fontFamily: 'Georgia, serif', fontSize: 11,
-          color: 'rgba(245,240,232,0.5)', marginTop: 2,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
+        <div style={{ fontFamily: 'Georgia, serif', fontSize: 11, color: 'rgba(245,240,232,0.5)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {address?.split(',')[0]}
         </div>
       </div>
 
-      {/* SVG floor plan */}
+      {/* ── SVG Floor Plan ── */}
       <div style={{
-        background: 'rgba(14,13,11,0.92)',
+        background: 'rgba(12,11,10,0.95)',
         backdropFilter: 'blur(16px)',
         WebkitBackdropFilter: 'blur(16px)',
         border: `1.5px solid ${colors.gunmetal}`,
-        borderTop: `1px solid ${colors.gunmetal}33`,
+        borderTop: `1px solid ${colors.gunmetal}22`,
         borderBottom: 'none',
       }}>
-        <svg
-          width="280" height="440"
-          viewBox="0 0 260 440"
-          style={{ display: 'block' }}
-        >
-          <defs>
-            <style>{`
-              @keyframes markerPulse {
-                0%   { r: 7px; opacity: 0.5; }
-                60%  { r: 18px; opacity: 0; }
-                100% { r: 18px; opacity: 0; }
-              }
-            `}</style>
-          </defs>
+        <svg width="280" height="440" viewBox="0 0 260 440" style={{ display: 'block' }}>
 
-          {/* Background */}
           <rect width="260" height="440" fill="#0b0a09" />
 
-          {/* Grid */}
-          {[80, 160, 240, 320].map(y => (
-            <line key={y} x1={20} y1={y} x2={240} y2={y}
-              stroke={colors.gunmetal} strokeWidth={0.3} strokeDasharray="3,5" opacity={0.3} />
-          ))}
-          {[65, 130, 195].map(x => (
-            <line key={x} x1={x} y1={20} x2={x} y2={420}
-              stroke={colors.gunmetal} strokeWidth={0.3} strokeDasharray="3,5" opacity={0.3} />
-          ))}
+          {/* ── Clickable Rooms ── */}
+          {ROOMS.map(room => {
+            const active = isActive(room)
+            const hovered = hoveredRoom === room.id
+            const color = roomColor(room)
+            const labelY = room.y + room.h / 2 - (active || hovered ? 5 : 3)
+            return (
+              <g
+                key={room.id}
+                onClick={() => onElementClick(getElement(room.elementId))}
+                onMouseEnter={() => setHoveredRoom(room.id)}
+                onMouseLeave={() => setHoveredRoom(null)}
+                style={{ cursor: 'pointer' }}
+              >
+                <rect
+                  x={room.x} y={room.y} width={room.w} height={room.h}
+                  fill={roomFill(room)}
+                  stroke={roomStroke(room)}
+                  strokeWidth={roomStrokeWidth(room)}
+                  rx={2}
+                  style={{ transition: 'fill 0.15s, stroke 0.15s' }}
+                />
+                {/* Room icon + label */}
+                <text
+                  x={room.x + room.w / 2}
+                  y={labelY}
+                  textAnchor="middle"
+                  style={{
+                    fontFamily: 'ui-monospace, monospace',
+                    fontSize: active ? 7.5 : 7,
+                    fill: active ? color : hovered ? `${color}cc` : `${colors.gunmetal}bb`,
+                    letterSpacing: '0.08em',
+                    userSelect: 'none',
+                    pointerEvents: 'none',
+                  }}
+                >
+                  {room.icon} {room.label}
+                </text>
+                {/* Sub-hint */}
+                <text
+                  x={room.x + room.w / 2}
+                  y={labelY + 10}
+                  textAnchor="middle"
+                  style={{
+                    fontFamily: 'ui-monospace, monospace',
+                    fontSize: 6,
+                    fill: active ? `${color}bb` : hovered ? `${color}88` : 'transparent',
+                    letterSpacing: '0.05em',
+                    userSelect: 'none',
+                    pointerEvents: 'none',
+                  }}
+                >
+                  {active ? '● CHATTING' : 'tap to chat'}
+                </text>
+              </g>
+            )
+          })}
 
-          {/* ─── ROOF ─── */}
-          <g opacity={0.9}>
-            <polygon points="20,80 130,20 240,80" fill={`${colors.amber}18`} stroke={colors.amber} strokeWidth={1.2} />
-            <line x1={130} y1={20} x2={130} y2={80}
-              stroke={colors.gunmetal} strokeWidth={0.8} strokeDasharray="2,3" opacity={0.5} />
-            <text x={130} y={58} textAnchor="middle"
-              style={{ fontFamily: 'ui-monospace, monospace', fontSize: 7, fill: colors.gunmetal + 'cc', letterSpacing: '0.1em' }}>
-              ROOF
-            </text>
+          {/* ── Roof (clickable) ── */}
+          <g
+            onClick={() => onElementClick(getElement('roof'))}
+            onMouseEnter={() => setHoveredRoom('roof')}
+            onMouseLeave={() => setHoveredRoom(null)}
+            style={{ cursor: 'pointer' }}
+          >
+            <polygon
+              points="20,80 130,20 240,80"
+              fill={activeElement?.id === 'roof' ? `${colors.amber}28` : hoveredRoom === 'roof' ? `${colors.amber}18` : `${colors.amber}0a`}
+              stroke={activeElement?.id === 'roof' ? colors.amber : hoveredRoom === 'roof' ? `${colors.amber}88` : `${colors.amber}44`}
+              strokeWidth={activeElement?.id === 'roof' ? 1.5 : 1}
+              style={{ transition: 'fill 0.15s, stroke 0.15s' }}
+            />
+            <text x={130} y={56} textAnchor="middle" style={{
+              fontFamily: 'ui-monospace, monospace', fontSize: 7.5,
+              fill: activeElement?.id === 'roof' ? colors.amber : hoveredRoom === 'roof' ? `${colors.amber}cc` : `${colors.gunmetal}bb`,
+              letterSpacing: '0.1em', userSelect: 'none', pointerEvents: 'none',
+            }}>☁ ROOF</text>
+            <text x={130} y={66} textAnchor="middle" style={{
+              fontFamily: 'ui-monospace, monospace', fontSize: 6,
+              fill: activeElement?.id === 'roof' ? `${colors.amber}bb` : hoveredRoom === 'roof' ? `${colors.amber}88` : 'transparent',
+              letterSpacing: '0.05em', userSelect: 'none', pointerEvents: 'none',
+            }}>{activeElement?.id === 'roof' ? '● CHATTING' : 'tap to chat'}</text>
           </g>
 
-          {/* ─── FLOOR 3 ─── */}
-          <g>
-            <rect x={20} y={80} width={220} height={90} fill={`${colors.amber}08`} stroke={colors.amber} strokeWidth={1} />
-            {/* Interior walls */}
-            <line x1={130} y1={80} x2={130} y2={170} stroke={colors.gunmetal} strokeWidth={0.8} opacity={0.5} />
-            <line x1={20} y1={125} x2={130} y2={125} stroke={colors.gunmetal} strokeWidth={0.5} strokeDasharray="3,3" opacity={0.35} />
-            {/* Room labels */}
-            <text x={75} y={107} textAnchor="middle"
-              style={{ fontFamily: 'ui-monospace, monospace', fontSize: 7, fill: colors.gunmetal + 'bb', letterSpacing: '0.08em' }}>
-              LIVING
-            </text>
-            <text x={75} y={145} textAnchor="middle"
-              style={{ fontFamily: 'ui-monospace, monospace', fontSize: 7, fill: colors.gunmetal + 'bb', letterSpacing: '0.08em' }}>
-              BED 1
-            </text>
-            <text x={185} y={121} textAnchor="middle"
-              style={{ fontFamily: 'ui-monospace, monospace', fontSize: 7, fill: colors.gunmetal + 'bb', letterSpacing: '0.08em' }}>
-              KIT / BATH
-            </text>
-            {/* Floor label */}
-            <text x={8} y={128} textAnchor="middle" transform="rotate(-90,8,128)"
-              style={{ fontFamily: 'ui-monospace, monospace', fontSize: 7, fill: colors.amber + '88', letterSpacing: '0.12em' }}>
-              3F
-            </text>
-          </g>
-
-          {/* ─── FLOOR 2 ─── */}
-          <g>
-            <rect x={20} y={170} width={220} height={90} fill={`${colors.amber}06`} stroke={colors.amber} strokeWidth={1} />
-            <line x1={130} y1={170} x2={130} y2={260} stroke={colors.gunmetal} strokeWidth={0.8} opacity={0.5} />
-            <line x1={20} y1={215} x2={130} y2={215} stroke={colors.gunmetal} strokeWidth={0.5} strokeDasharray="3,3" opacity={0.35} />
-            <line x1={130} y1={215} x2={240} y2={215} stroke={colors.gunmetal} strokeWidth={0.5} strokeDasharray="3,3" opacity={0.35} />
-            <text x={75} y={197} textAnchor="middle"
-              style={{ fontFamily: 'ui-monospace, monospace', fontSize: 7, fill: colors.gunmetal + 'bb', letterSpacing: '0.08em' }}>
-              LIVING
-            </text>
-            <text x={75} y={235} textAnchor="middle"
-              style={{ fontFamily: 'ui-monospace, monospace', fontSize: 7, fill: colors.gunmetal + 'bb', letterSpacing: '0.08em' }}>
-              BED 1
-            </text>
-            <text x={185} y={200} textAnchor="middle"
-              style={{ fontFamily: 'ui-monospace, monospace', fontSize: 7, fill: colors.gunmetal + 'bb', letterSpacing: '0.08em' }}>
-              KITCHEN
-            </text>
-            <text x={185} y={235} textAnchor="middle"
-              style={{ fontFamily: 'ui-monospace, monospace', fontSize: 7, fill: colors.gunmetal + 'bb', letterSpacing: '0.08em' }}>
-              BATHROOM
-            </text>
-            <text x={8} y={218} textAnchor="middle" transform="rotate(-90,8,218)"
-              style={{ fontFamily: 'ui-monospace, monospace', fontSize: 7, fill: colors.amber + '88', letterSpacing: '0.12em' }}>
-              2F
-            </text>
-          </g>
-
-          {/* ─── FLOOR 1 ─── */}
-          <g>
-            <rect x={20} y={260} width={220} height={90} fill={`${colors.amber}05`} stroke={colors.amber} strokeWidth={1} />
-            <line x1={130} y1={260} x2={130} y2={350} stroke={colors.gunmetal} strokeWidth={0.8} opacity={0.5} />
-            <line x1={20} y1={305} x2={130} y2={305} stroke={colors.gunmetal} strokeWidth={0.5} strokeDasharray="3,3" opacity={0.35} />
-            <text x={75} y={287} textAnchor="middle"
-              style={{ fontFamily: 'ui-monospace, monospace', fontSize: 7, fill: colors.gunmetal + 'bb', letterSpacing: '0.08em' }}>
-              LIVING
-            </text>
-            <text x={75} y={325} textAnchor="middle"
-              style={{ fontFamily: 'ui-monospace, monospace', fontSize: 7, fill: colors.gunmetal + 'bb', letterSpacing: '0.08em' }}>
-              BED 1
-            </text>
-            <text x={185} y={302} textAnchor="middle"
-              style={{ fontFamily: 'ui-monospace, monospace', fontSize: 7, fill: colors.gunmetal + 'bb', letterSpacing: '0.08em' }}>
-              KITCHEN
-            </text>
-            <text x={8} y={308} textAnchor="middle" transform="rotate(-90,8,308)"
-              style={{ fontFamily: 'ui-monospace, monospace', fontSize: 7, fill: colors.amber + '88', letterSpacing: '0.12em' }}>
-              1F
-            </text>
-          </g>
-
-          {/* ─── BASEMENT ─── */}
-          <g>
-            <rect x={20} y={350} width={220} height={60} fill={`${colors.amber}04`} stroke={colors.gunmetal} strokeWidth={0.8} strokeDasharray="4,3" opacity={0.7} />
-            <text x={130} y={384} textAnchor="middle"
-              style={{ fontFamily: 'ui-monospace, monospace', fontSize: 7, fill: colors.gunmetal + 'aa', letterSpacing: '0.12em' }}>
-              BASEMENT · UTILITY
-            </text>
-            <text x={8} y={380} textAnchor="middle" transform="rotate(-90,8,380)"
-              style={{ fontFamily: 'ui-monospace, monospace', fontSize: 7, fill: colors.gunmetal + '66', letterSpacing: '0.12em' }}>
-              B
-            </text>
-          </g>
-
-          {/* ─── PLUMBING CHASE (vertical stack indicator) ─── */}
-          <rect x={152} y={80} width={8} height={270}
-            fill={`${colors.amber}15`} stroke={`${colors.amber}44`} strokeWidth={0.5}
-            strokeDasharray="2,3"
-          />
-          <text x={156} y={78} textAnchor="middle"
-            style={{ fontFamily: 'ui-monospace, monospace', fontSize: 6, fill: colors.amber + '66', letterSpacing: '0.05em' }}>
-            ↕ STACK
-          </text>
-
-          {/* ─── STAIR INDICATOR ─── */}
+          {/* ── Structural lines (drawn OVER rooms so they're visible) ── */}
+          {/* Outer building border per floor */}
           {[80, 170, 260].map(y => (
-            <g key={y}>
-              <rect x={108} y={y} width={22} height={12} fill="none" stroke={colors.gunmetal} strokeWidth={0.5} opacity={0.4} />
-              <line x1={108} y1={y + 4} x2={130} y2={y + 4} stroke={colors.gunmetal} strokeWidth={0.4} opacity={0.3} />
-              <line x1={108} y1={y + 8} x2={130} y2={y + 8} stroke={colors.gunmetal} strokeWidth={0.4} opacity={0.3} />
-            </g>
-          ))}
-
-          {/* ─── COMPASS ─── */}
-          <g transform="translate(235, 28)">
-            <text x={0} y={0} textAnchor="middle"
-              style={{ fontFamily: 'ui-monospace, monospace', fontSize: 8, fill: colors.amber + '88' }}>N</text>
-            <line x1={0} y1={3} x2={0} y2={10} stroke={colors.amber} strokeWidth={1} opacity={0.5} />
-          </g>
-
-          {/* ─── ELEMENT MARKERS ─── */}
-          {ELEMENTS.map(el => (
-            <PulsingMarker
-              key={el.id}
-              cx={el.cx}
-              cy={el.cy}
-              color={RISK_COLORS[el.riskLevel]}
-              active={activeElement?.id === el.id}
-              onClick={() => onElementClick(el)}
-              label={el.name}
-              icon={el.icon}
+            <rect key={y} x={20} y={y} width={220} height={90}
+              fill="none"
+              stroke={`${colors.amber}44`}
+              strokeWidth={1}
+              pointerEvents="none"
             />
           ))}
+          {/* Basement border */}
+          <rect x={20} y={350} width={220} height={70}
+            fill="none"
+            stroke={`${colors.gunmetal}66`}
+            strokeWidth={0.8}
+            strokeDasharray="4,3"
+            pointerEvents="none"
+          />
+          {/* Center wall divider */}
+          <line x1={130} y1={80} x2={130} y2={350}
+            stroke={`${colors.gunmetal}55`} strokeWidth={0.8} pointerEvents="none" />
+          {/* Horizontal floor dividers */}
+          <line x1={20} y1={170} x2={240} y2={170}
+            stroke={`${colors.gunmetal}55`} strokeWidth={0.8} pointerEvents="none" />
+          <line x1={20} y1={260} x2={240} y2={260}
+            stroke={`${colors.gunmetal}55`} strokeWidth={0.8} pointerEvents="none" />
+          {/* Mid-floor dividers */}
+          <line x1={20} y1={125} x2={130} y2={125}
+            stroke={`${colors.gunmetal}33`} strokeWidth={0.5} strokeDasharray="3,3" pointerEvents="none" />
+          <line x1={130} y1={125} x2={240} y2={125}
+            stroke={`${colors.gunmetal}33`} strokeWidth={0.5} strokeDasharray="3,3" pointerEvents="none" />
+          <line x1={20} y1={215} x2={240} y2={215}
+            stroke={`${colors.gunmetal}33`} strokeWidth={0.5} strokeDasharray="3,3" pointerEvents="none" />
+          <line x1={20} y1={305} x2={240} y2={305}
+            stroke={`${colors.gunmetal}33`} strokeWidth={0.5} strokeDasharray="3,3" pointerEvents="none" />
+          {/* Basement divider */}
+          <line x1={130} y1={350} x2={130} y2={420}
+            stroke={`${colors.gunmetal}33`} strokeWidth={0.5} strokeDasharray="3,3" pointerEvents="none" />
+
+          {/* ── Plumbing stack ── */}
+          <rect x={153} y={80} width={6} height={270}
+            fill={`${colors.amber}10`} stroke={`${colors.amber}30`} strokeWidth={0.5} strokeDasharray="2,4"
+            pointerEvents="none"
+          />
+          <text x={156} y={77} textAnchor="middle" style={{
+            fontFamily: 'ui-monospace, monospace', fontSize: 6, fill: `${colors.amber}55`,
+            userSelect: 'none', pointerEvents: 'none',
+          }}>↕ STACK</text>
+
+          {/* ── Floor labels ── */}
+          {FLOOR_LABELS.map(f => (
+            <text key={f.label} x={8} y={f.y} textAnchor="middle"
+              transform={`rotate(-90,8,${f.y})`}
+              style={{ fontFamily: 'ui-monospace, monospace', fontSize: 7, fill: `${colors.amber}77`, letterSpacing: '0.12em', userSelect: 'none', pointerEvents: 'none' }}>
+              {f.label}
+            </text>
+          ))}
+
+          {/* ── Compass ── */}
+          <text x={236} y={28} textAnchor="middle" style={{ fontFamily: 'ui-monospace, monospace', fontSize: 7, fill: `${colors.amber}88`, userSelect: 'none', pointerEvents: 'none' }}>N</text>
+          <line x1={236} y1={31} x2={236} y2={37} stroke={colors.amber} strokeWidth={1} opacity={0.5} pointerEvents="none" />
+
         </svg>
       </div>
 
-      {/* Legend */}
+      {/* ── Legend ── */}
       <div style={{
-        background: 'rgba(14,13,11,0.88)',
+        background: 'rgba(14,13,11,0.90)',
         backdropFilter: 'blur(16px)',
         WebkitBackdropFilter: 'blur(16px)',
         border: `1.5px solid ${colors.gunmetal}`,
-        borderTop: `1px solid ${colors.gunmetal}33`,
+        borderTop: `1px solid ${colors.gunmetal}22`,
         borderRadius: '0 0 12px 12px',
         padding: '8px 14px 10px',
         display: 'flex', flexWrap: 'wrap', gap: '4px 14px',
+        alignItems: 'center',
       }}>
-        <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 8, color: colors.gunmetal + 'aa', letterSpacing: '0.08em' }}>TAP ANY ELEMENT TO EXPLORE</span>
+        <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 8, color: `${colors.gunmetal}aa`, letterSpacing: '0.08em' }}>
+          CLICK ANY ROOM TO CHAT
+        </span>
         {[
           { color: colors.riskOrange, label: 'Risk' },
-          { color: colors.amber, label: 'Monitor' },
-          { color: '#5A8060', label: 'Clear' },
+          { color: colors.amber,      label: 'Monitor' },
+          { color: '#5A8060',         label: 'Clear' },
         ].map(l => (
           <span key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: l.color, display: 'inline-block' }} />

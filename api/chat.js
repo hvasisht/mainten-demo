@@ -11,19 +11,21 @@ module.exports = async (req, res) => {
   if (!messages || !element) return res.status(400).json({ error: 'messages and element required' })
 
   if (!HAS_API_KEY) {
-    return res.json({ reply: getDemoChatReply(element.name) })
+    // Pass the full messages array so the demo can read the actual question
+    return res.json({ reply: getDemoChatReply(messages, element) })
   }
 
   try {
     const message = await anthropic.messages.create({
-      model: 'claude-opus-4-6',
-      max_tokens: 400,
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 600,
       system: buildChatSystem(propertyData, element),
       messages: messages.map(m => ({ role: m.role, content: m.content })),
     })
     res.json({ reply: message.content[0].text })
   } catch (err) {
     console.error('[chat]', err.message)
-    res.status(500).json({ error: 'AI unavailable' })
+    // Fall back to demo if Claude fails
+    res.json({ reply: getDemoChatReply(messages, element) })
   }
 }

@@ -2,12 +2,13 @@ import { useState, useEffect, useRef } from 'react'
 import { colors } from '../tokens'
 
 const INITIAL_MESSAGES = {
-  boiler: "I know this building. Tell me what you want to know about the heating system — how it works, what to check, what sounds are normal, anything.",
-  electrical: "The electrical in this building is the most important thing to understand. What do you want to know?",
-  kitchen: "The kitchen pipes are part of a shared stack running through all three floors. What's happening — are you seeing pressure issues, discolouration, or something else?",
-  bathroom: "The bathroom stack in a triple-decker this age has some specific things worth knowing. What's your question?",
-  frontwall: "This wall holds the building up. What do you want to know — drilling, hanging things, what's behind it, load capacity?",
-  roof: "The roof is the building's first line of defence. What do you want to know?",
+  boiler:     "Ask me anything about the heating system — how it works, repair rights, who to call, what sounds are normal.",
+  electrical: "Ask me anything about the electrical — knob-and-tube risks, what's safe to plug in, who's responsible for repairs.",
+  kitchen:    "Ask me anything about this kitchen — pipe issues, pest problems, repairs, who to call, landlord responsibility.",
+  bathroom:   "Ask me anything about this bathroom — leaks, mould, repairs, plumber contacts, or anything else.",
+  bedroom:    "Ask me anything about this bedroom — lead paint, drilling walls, safety, tenant rights, or anything at all.",
+  living:     "Ask me anything about this room — wall safety, drilling, what's load-bearing, or any issue you're dealing with.",
+  roof:       "Ask me anything about the roof — leaks, who fixes it, repair timeline, or what signs to watch for.",
 }
 
 function renderMarkdown(text) {
@@ -91,12 +92,13 @@ function TypingIndicator() {
 }
 
 const SUGGESTED_QUESTIONS = {
-  boiler:     ['Is this safe?', 'What sounds are normal?', 'Who maintains it?'],
-  electrical: ['What\'s knob-and-tube?', 'Is it safe to use my microwave?', 'Who\'s responsible?'],
-  kitchen:    ['Why is my water pressure low?', 'Whose job is this?', 'What does galvanised mean?'],
-  bathroom:   ['Can I replace the showerhead?', 'What causes that smell?', 'Is mould the landlord\'s problem?'],
-  frontwall:  ['Can I drill here?', 'Can I put up shelves?', 'What\'s inside the wall?'],
-  roof:       ['Who fixes a leak?', 'How do I report this?', 'What\'s the roof made of?'],
+  boiler:     ['Who do I call for repairs?', 'What sounds are normal?', 'Is this safe?'],
+  electrical: ['Who\'s responsible for repairs?', 'What\'s knob-and-tube wiring?', 'Is it safe to use my microwave?'],
+  kitchen:    ['There is a dead rat in kitchen', 'Who do I call for plumbing?', 'Why is my water pressure low?'],
+  bathroom:   ['There is mould in the bathroom', 'Who do I call for leaks?', 'Can I replace the showerhead?'],
+  bedroom:    ['Is the lead paint dangerous?', 'Can I drill into walls?', 'Who do I contact about safety issues?'],
+  living:     ['Can I put up shelves?', 'What\'s inside the wall?', 'Who do I call for structural issues?'],
+  roof:       ['Who fixes a roof leak?', 'How do I report this?', 'Is this landlord\'s responsibility?'],
 }
 
 export default function ChatPanel({ element, propertyData, visible, onClose, onReportIssue }) {
