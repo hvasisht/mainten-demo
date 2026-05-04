@@ -26,6 +26,7 @@ export default function Home() {
   const [propertyData, setPropertyData]   = useState(null)
 
   // Profile state
+  const [userProfile, setUserProfile]     = useState(null)
   const [activeElement, setActiveElement] = useState(null)
   const [chatVisible, setChatVisible]     = useState(false)
   const [issueElement, setIssueElement]   = useState(null)
@@ -69,7 +70,8 @@ export default function Home() {
   }, [])
 
   // ── Onboarding complete ──
-  const handleOnboardingComplete = useCallback(() => {
+  const handleOnboardingComplete = useCallback((profile) => {
+    setUserProfile(profile)
     setAppState('profile')
     setChatVisible(false)
     setActiveElement(null)
@@ -93,6 +95,7 @@ export default function Home() {
     setAppState('search')
     setSelectedAddress(null)
     setPropertyData(null)
+    setUserProfile(null)
     setFlyTo(null)
     setActiveElement(null)
     setChatVisible(false)
@@ -257,6 +260,7 @@ export default function Home() {
         activeElement={activeElement}
         onElementClick={handleElementClick}
         visible={inProfile}
+        userProfile={userProfile}
       />
 
       {/* ─── PROFILE: PROPERTY DASHBOARD (score + permits + can i? + share) ─── */}
@@ -270,6 +274,7 @@ export default function Home() {
       <ChatPanel
         element={activeElement}
         propertyData={propertyData}
+        userProfile={userProfile}
         visible={inProfile && chatVisible}
         onClose={() => setChatVisible(false)}
         onReportIssue={handleReportIssue}

@@ -101,7 +101,7 @@ const SUGGESTED_QUESTIONS = {
   roof:       ['Who fixes a roof leak?', 'How do I report this?', 'Is this landlord\'s responsibility?'],
 }
 
-export default function ChatPanel({ element, propertyData, visible, onClose, onReportIssue }) {
+export default function ChatPanel({ element, propertyData, userProfile, visible, onClose, onReportIssue }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -115,7 +115,10 @@ export default function ChatPanel({ element, propertyData, visible, onClose, onR
     if (prevElement.current?.id === element.id) return
     prevElement.current = element
 
-    const greeting = INITIAL_MESSAGES[element.id] || `What do you want to know about the ${element.name}?`
+    const base = INITIAL_MESSAGES[element.id] || `What do you want to know about the ${element.name}?`
+    const greeting = userProfile?.floor
+      ? `${base}\n\nI can see you're in unit/floor ${userProfile.floor}.`
+      : base
     setMessages([{ role: 'assistant', content: greeting }])
     setInput('')
     setTimeout(() => inputRef.current?.focus(), 300)
@@ -141,6 +144,7 @@ export default function ChatPanel({ element, propertyData, visible, onClose, onR
           messages: next,
           propertyData,
           element: { name: element.name, context: element.context },
+          userProfile,
         }),
       })
       const data = await res.json()

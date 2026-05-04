@@ -115,7 +115,7 @@ function getDemoChatReply(messages, element) {
   if (/rat|mice|mouse|rodent|pest|bug|cockroach|insect|infestation|dead.*animal|vermin/i.test(q)) {
     return `**Landlord's responsibility** under MA Sanitary Code (105 CMR 410.550) — rodent infestations must be eliminated at the owner's expense.\n\nNotify your landlord **in writing** immediately. If no response within 24 hours:\n\n**Pest Control / Exterminator:**\n${fmtContacts('pest')}\n\nDocument everything with timestamped photos.\n📞 Boston Inspectional Services: **(617) 635-5300**`
   }
-  if (/contact|who.*(call|fix|hire)|phone|number|contractor/i.test(q)) {
+  if (/\b(contact|who.*(call|fix|hire|should i call)|phone|number|contractor|get someone|find a)\b/i.test(q)) {
     if (/plumb|pipe|leak|water|drain|toilet|sink|shower/i.test(q + elementName)) {
       return `Plumbing repairs in a pre-war building are **landlord responsibility**.\n\n**Licensed Plumbers:**\n${fmtContacts('plumbing')}\n\nFor active leaks call 24/7: **(617) 288-2911**`
     }
@@ -124,6 +124,9 @@ function getDemoChatReply(messages, element) {
     }
     if (/heat|boiler|hvac|radiator|steam/i.test(q + elementName)) {
       return `Heating failures are **urgent landlord responsibility** (min 68°F required by MA law).\n\n**HVAC / Boiler:**\n${fmtContacts('hvac')}\n\nNo response? Boston Inspectional: **(617) 635-5300**`
+    }
+    if (/pest|rat|mouse|rodent|bug|insect/i.test(q + elementName)) {
+      return `Pest infestations are **landlord responsibility** under MA Sanitary Code 410.550.\n\n**Pest Control:**\n${fmtContacts('pest')}\n\nNotify landlord in writing first. If no response within 24hrs, contact Boston Inspectional: **(617) 635-5300**`
     }
     return `**Boston Service Providers:**\n\n**Pest Control:**\n${fmtContacts('pest')}\n\n**Plumbing:**\n${fmtContacts('plumbing')}\n\n**Electrical:**\n${fmtContacts('electrical')}\n\n**HVAC:**\n${fmtContacts('hvac')}\n\n**Tenant Rights:**\n${fmtContacts('tenant')}`
   }
@@ -135,13 +138,13 @@ function getDemoChatReply(messages, element) {
   }
 
   const ELEMENT_DEFAULTS = {
-    'Boiler':     `The steam boiler in this building distributes heat through cast iron radiators. Annual maintenance required: water level check, pressure relief valve test, radiator bleeding.\n\n**Boiler Service:** Boston Standard **(617) 288-2911** (24/7)\n\nAsk me anything — repairs, costs, rights, contacts.`,
-    'Electrical': `Pre-war buildings have original **knob-and-tube wiring** in wall cavities — ungrounded and unable to handle modern loads. Even if the panel was upgraded, in-wall wiring is likely original.\n\n**Inspection:** Century Electrical **(617) 782-0993**`,
-    'Kitchen':    `Pre-war galvanised iron pipes corrode from inside — orange-tinted cold water in the morning confirms it. **Landlord responsibility** to address.\n\n**Plumbers:**\n${fmtContacts('plumbing')}\n\nAsk me anything — pest issues, appliances, rights.`,
-    'Bathroom':   `The plumbing chase runs through all three floors. Cast iron drain stack is durable but supply lines are likely galvanised. Document ceiling stains below.\n\n**Plumbing:** G&C **(617) 323-2422**\n\nWhat's your question?`,
-    'Bedroom':    `**Lead paint assumed present** on all original surfaces. Never sand or scrape. CO and smoke detectors required by MA law.\n\n**Tenant Rights:** Boston Tenant Coalition **(617) 522-2800**`,
-    'Living':     `Load-bearing balloon frame walls run from basement to roof with no fire blocking. Use a stud finder before drilling. Lead paint assumed present.\n\n**Structural concerns:** BuildZoom **buildzoom.com**`,
-    'Roof':       `Flat roofs on triple-deckers are typically modified bitumen. Watch for top-floor ceiling stains — water infiltration spreads fast in balloon frame construction.\n\n**Roofing:** Unified Roofing **(617) 848-4755**`,
+    'Boiler':     `The steam boiler in this building distributes heat to all floors through cast iron radiators. It's a two-pipe steam system typical of pre-war Boston triple-deckers.\n\nWhat do you want to know — how it works, unusual sounds, repair rights, or something else?`,
+    'Electrical': `Pre-war buildings often have original **knob-and-tube wiring** still in wall cavities, even if the panel was upgraded. This affects what circuits can handle and what your landlord is responsible for.\n\nWhat's your question about the electrical?`,
+    'Kitchen':    `Pre-war kitchens in triple-deckers share a vertical plumbing chase through all three floors. Common issues include galvanised pipe corrosion, low water pressure, and shared drainage problems.\n\nWhat would you like to know?`,
+    'Bathroom':   `The bathroom plumbing uses the same chase as the kitchen. Cast iron drain stacks are original and durable, but supply lines may be original galvanised iron — prone to corrosion after 80+ years.\n\nWhat's going on?`,
+    'Bedroom':    `Bedrooms in pre-war triple-deckers have plaster-over-lath walls. **Lead paint is assumed present** on all original painted surfaces (built before 1978). CO and smoke detectors are legally required.\n\nWhat would you like to know?`,
+    'Living':     `The living room has **load-bearing balloon frame walls** — the cavity runs from foundation to roof with no fire blocking. Lead paint assumed present on all original surfaces. Use a stud finder before drilling.\n\nWhat's your question?`,
+    'Roof':       `Flat roofs on triple-deckers are typically modified bitumen or tar-and-gravel. The biggest risk is water infiltration — watch for ceiling stains on the top floor after rain.\n\nWhat would you like to know?`,
   }
 
   const key = Object.keys(ELEMENT_DEFAULTS).find(k => elementName.toLowerCase().includes(k.toLowerCase()))
@@ -200,31 +203,36 @@ Status values: RISK | INFERRED | PROBABLE | CONFIRMED | MONITOR | CLEAR
 Icons: ⚡ electrical, 🔧 plumbing, ⚠ hazards, 🔥 structural/fire, 🏠 roof/exterior, 🌡 heating, ✓ clear`
 }
 
-function buildChatSystem(propertyData, element) {
+function buildChatSystem(propertyData, element, userProfile) {
   const a = propertyData?.assessor || {}
   const contactsList = Object.values(BOSTON_CONTACTS).map(cat =>
     `${cat.label}:\n` + cat.providers.map(p => `  • ${p.name} — ${p.phone} (${p.note})`).join('\n')
   ).join('\n\n')
 
-  return `You are Mainten AI — a Google Gemini-powered property advisor for Boston renters. Answer ANY question about this property, home maintenance, tenant rights, pest issues, or finding contractors.
+  const userCtx = userProfile
+    ? `\n- User: ${userProfile.role || 'tenant'}${userProfile.floor ? `, Floor/Unit: ${userProfile.floor}` : ''}${userProfile.moveIn ? `, Moved in: ${userProfile.moveIn}` : ''}`
+    : ''
+
+  return `You are Mainten AI — an expert property advisor for Boston renters, powered by Google Gemini. You have deep knowledge of pre-war Boston construction, Massachusetts housing law, tenant rights, and building systems.
 
 PROPERTY:
 - Address: ${propertyData?.address || 'Unknown'}, built ${a.yearBuilt || 'unknown'}
 - Type: ${a.luDesc || 'Residential'} · ${propertyData?.units?.count || '?'} units
 - Heat: ${a.heatType || 'Unknown'} / ${a.heatSystem || 'Unknown'}
-- Currently discussing: ${element?.name || 'General'}
+- Currently discussing: ${element?.name || 'General'}${userCtx}
 
-BOSTON SERVICE CONTACTS — use these when asked for contractors or who to call:
-${contactsList}
+HOW TO RESPOND:
+- Answer the user's EXACT question directly and conversationally — like a knowledgeable friend
+- Be specific to this property: pre-war construction, Boston, MA, the building's age and systems
+- Reference Massachusetts law (105 CMR 410) when relevant for landlord responsibility
+- *** CRITICAL: Do NOT include phone numbers, company names, or service provider contacts in your response UNLESS the user explicitly asks "who do I call", "give me a contact", "what number", "who should I hire", or similar phrasing ***
+- When someone describes a problem (leak, pest, noise, mould), explain what it is, why it happens in this building type, and who is responsible — but do NOT jump to giving contacts unprompted
+- Do not start with "Great question!" or similar filler
+- Use **bold** for key points. Use bullet lists when listing multiple items.
+- Keep responses concise (under 180 words) unless the question genuinely needs more detail
 
-RULES:
-- Answer the user's ACTUAL question — never default to generic element descriptions
-- Pest/rat/rodent → landlord responsibility under MA Sanitary Code 410.550 + give pest control contacts
-- Any "who to call" or repair question → provide name + phone number from the contacts above
-- State landlord vs tenant responsibility before giving contacts
-- Reference specific property age and construction era
-- Format with **bold** for key points and bullet lists
-- Under 200 words, no filler phrases`
+BOSTON SERVICE CONTACTS — only share these when the user explicitly asks for contacts or phone numbers:
+${contactsList}`
 }
 
 function buildCanIPrompt(question, propertyData) {

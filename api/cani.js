@@ -11,12 +11,13 @@ const DEMO_ANSWERS = {
 
 function getDemoAnswer(question) {
   const q = question.toLowerCase()
-  if (/drill|hole|wall/.test(q))                              return DEMO_ANSWERS.drill
-  if (/shower|faucet|tap|plumb/.test(q))                     return DEMO_ANSWERS.showerhead
+  // Specific matches first to avoid false positives (e.g. "shelves on walls" hitting 'wall')
   if (/shelf|shelv|hang|mount/.test(q))                      return DEMO_ANSWERS.shelves
-  if (/wear|damage|deposit|move.?out|landlord/.test(q))      return DEMO_ANSWERS.wear
   if (/command|strip|adhesive|hook/.test(q))                 return DEMO_ANSWERS.command
   if (/paint|colour|color/.test(q))                          return DEMO_ANSWERS.paint
+  if (/shower|faucet|tap|plumb/.test(q))                     return DEMO_ANSWERS.showerhead
+  if (/wear|damage|deposit|move.?out|landlord/.test(q))      return DEMO_ANSWERS.wear
+  if (/drill|hole|wall/.test(q))                             return DEMO_ANSWERS.drill
   return { answer: 'In a pre-war Boston triple-decker, anything involving the building structure or original systems requires landlord notification first. Document what you\'re doing with before-and-after photos. If in doubt, ask in writing.', safe: 'CAUTION' }
 }
 

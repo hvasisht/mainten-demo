@@ -93,11 +93,23 @@ const FLOOR_LABELS = [
   { label: 'B',  y: 380 },
 ]
 
-export default function TripleDeckerMap({ address, propertyData, activeElement, onElementClick, visible }) {
+// Parse floor number from profile.floor string like "2", "Unit 2", "2nd floor", "Floor 2"
+function parseUserFloor(floorStr) {
+  if (!floorStr) return null
+  const m = floorStr.match(/\d+/)
+  const n = m ? parseInt(m[0]) : null
+  if (!n || n < 1 || n > 3) return null
+  return n
+}
+
+export default function TripleDeckerMap({ address, propertyData, activeElement, onElementClick, visible, userProfile }) {
   const [hoveredRoom, setHoveredRoom] = useState(null)
 
   const yearBuilt = propertyData?.assessor?.yearBuilt || '1914'
   const units = propertyData?.units?.count || 3
+
+  // If tenant specified their floor, highlight only that floor
+  const userFloor = parseUserFloor(userProfile?.floor)
 
   function getElement(id) {
     return ELEMENTS.find(e => e.id === id)
@@ -112,22 +124,41 @@ export default function TripleDeckerMap({ address, propertyData, activeElement, 
     return activeElement?.id === room.elementId
   }
 
+  // Returns true if this room is on the user's floor (or basement, always accessible)
+  function isUserFloor(room) {
+    if (!userFloor) return true // no filter set
+    if (room.id.startsWith('b_')) return true // basement always shown
+    const floorMap = { f3: 3, f2: 2, f1: 1 }
+    const prefix = room.id.slice(0, 2)
+    return floorMap[prefix] === userFloor
+  }
+
   function roomFill(room) {
     const c = roomColor(room)
+    const dimmed = !isUserFloor(room)
     if (isActive(room))           return `${c}2a`
     if (hoveredRoom === room.id)  return `${c}18`
+    if (dimmed)                   return `${c}04`
     return `${c}08`
   }
 
   function roomStroke(room) {
     const c = roomColor(room)
+    const dimmed = !isUserFloor(room)
     if (isActive(room))           return c
     if (hoveredRoom === room.id)  return `${c}99`
+    if (dimmed)                   return `${c}18`
     return `${c}33`
   }
 
   function roomStrokeWidth(room) {
     return isActive(room) ? 1.5 : 0.8
+  }
+
+  function roomLabelOpacity(room) {
+    if (!userFloor) return 1
+    if (room.id.startsWith('b_')) return 1
+    return isUserFloor(room) ? 1 : 0.25
   }
 
   return (
@@ -191,7 +222,7 @@ export default function TripleDeckerMap({ address, propertyData, activeElement, 
                 onClick={() => onElementClick(getElement(room.elementId))}
                 onMouseEnter={() => setHoveredRoom(room.id)}
                 onMouseLeave={() => setHoveredRoom(null)}
-                style={{ cursor: 'pointer' }}
+                style={{ cursor: 'pointer', opacity: roomLabelOpacity(room) }}
               >
                 <rect
                   x={room.x} y={room.y} width={room.w} height={room.h}
@@ -313,13 +344,25 @@ export default function TripleDeckerMap({ address, propertyData, activeElement, 
           }}>↕ STACK</text>
 
           {/* ── Floor labels ── */}
-          {FLOOR_LABELS.map(f => (
-            <text key={f.label} x={8} y={f.y} textAnchor="middle"
-              transform={`rotate(-90,8,${f.y})`}
-              style={{ fontFamily: 'ui-monospace, monospace', fontSize: 7, fill: `${colors.amber}77`, letterSpacing: '0.12em', userSelect: 'none', pointerEvents: 'none' }}>
-              {f.label}
-            </text>
-          ))}
+          {FLOOR_LABELS.map(f => {
+            const floorNum = f.label === '3F' ? 3 : f.label === '2F' ? 2 : f.label === '1F' ? 1 : null
+            const isMyFloor = userFloor && floorNum === userFloor
+            return (
+              <g key={f.label}>
+                <text x={8} y={f.y} textAnchor="middle"
+                  transform={`rotate(-90,8,${f.y})`}
+                  style={{ fontFamily: 'ui-monospace, monospace', fontSize: 7, fill: isMyFloor ? colors.amber : `${colors.amber}77`, letterSpacing: '0.12em', userSelect: 'none', pointerEvents: 'none' }}>
+                  {f.label}
+                </text>
+                {isMyFloor && (
+                  <text x={252} y={f.y - 6} textAnchor="end"
+                    style={{ fontFamily: 'ui-monospace, monospace', fontSize: 5.5, fill: `${colors.amber}cc`, letterSpacing: '0.08em', userSelect: 'none', pointerEvents: 'none' }}>
+                    YOUR UNIT
+                  </text>
+                )}
+              </g>
+            )
+          })}
 
           {/* ── Compass ── */}
           <text x={236} y={28} textAnchor="middle" style={{ fontFamily: 'ui-monospace, monospace', fontSize: 7, fill: `${colors.amber}88`, userSelect: 'none', pointerEvents: 'none' }}>N</text>
