@@ -148,7 +148,7 @@ export default function Home() {
           <div style={{
             marginTop: 14,
             width: '100%', maxWidth: 680,
-            paddingLeft: 4,
+            textAlign: 'center',
             pointerEvents: 'none',
           }}>
             <span style={{
