@@ -135,33 +135,26 @@ export default function Home() {
             }}>
             MAINTEN
           </div>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
             <SearchBar
               onFlyTo={setFlyTo}
               onAddressSelect={handleAddressSelect}
             />
+            {!selectedAddress && (
+              <div style={{ textAlign: 'center', pointerEvents: 'none' }}>
+                <span style={{
+                  fontFamily: 'Georgia, serif',
+                  fontSize: 13,
+                  color: 'rgba(200,180,120,0.55)',
+                  letterSpacing: '0.02em',
+                  fontStyle: 'italic',
+                }}>
+                  AI-powered property intelligence for renters.
+                </span>
+              </div>
+            )}
           </div>
         </div>
-
-        {/* Subtitle */}
-        {!selectedAddress && (
-          <div style={{
-            marginTop: 14,
-            width: '100%', maxWidth: 680,
-            textAlign: 'center',
-            pointerEvents: 'none',
-          }}>
-            <span style={{
-              fontFamily: 'Georgia, serif',
-              fontSize: 13,
-              color: 'rgba(200,180,120,0.55)',
-              letterSpacing: '0.02em',
-              fontStyle: 'italic',
-            }}>
-              AI-powered property intelligence for renters.
-            </span>
-          </div>
-        )}
 
         {/* Address pill */}
         {selectedAddress && (
