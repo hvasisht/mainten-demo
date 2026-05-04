@@ -12,7 +12,7 @@ const genAI = HAS_API_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null
 
 // Single-shot text generation (insights, diagnose, cani)
 async function geminiGenerate(prompt) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
   const result = await model.generateContent(prompt)
   return result.response.text().trim()
 }
@@ -20,7 +20,7 @@ async function geminiGenerate(prompt) {
 // Multi-turn chat with system instruction (chat panel)
 async function geminiChat(systemInstruction, messages) {
   const model = genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',
+    model: 'gemini-2.5-flash',
     systemInstruction,
   })
   // All messages except the last go into history

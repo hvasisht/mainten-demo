@@ -4,6 +4,30 @@ const BASE = 'https://data.boston.gov/api/3/action/datastore_search_sql'
 const ASSESSOR_RID = '062fc6fa-b5ff-4270-86cf-202225e40858'
 const PERMITS_RID  = '6ddcd912-32a0-43df-9908-63574f8c7e77'
 
+// Boston Assessor land use code → human-readable label
+const LU_LABELS = {
+  '101': 'Single Family',
+  '102': 'Condominium',
+  '103': 'Two Family',
+  '104': 'Three Family',
+  '105': 'Three-Decker',
+  '106': 'Seven to Thirty Units',
+  '107': 'Mixed Use',
+  '108': 'Residential Condo',
+  '109': 'Residential - Other',
+  '111': 'Apartment 4–6 Units',
+  '112': 'Apartment 7+ Units',
+  '121': 'Rooming/Boarding House',
+  '130': 'Developable Land',
+  '131': 'Tax Title Land',
+  '132': 'Vacant Land',
+  'R1': 'Single Family',
+  'R2': 'Two Family',
+  'R3': 'Three Family',
+  'CD': 'Condominium',
+  'A': 'Apartment',
+}
+
 const LU_UNITS = {
   R1: 1, 'R1-A': 1,
   R2: 2, 'R2-A': 2,
@@ -88,7 +112,7 @@ async function getPropertyData(address) {
       yearBuilt:      primary.YR_BUILT,
       yrRemodel:      primary.YR_REMODEL,
       luCode:         primary.LU,
-      luDesc:         primary.LU_DESC || primary.PTYPE,
+      luDesc:         LU_LABELS[primary.LU_DESC] || LU_LABELS[primary.LU] || primary.LU_DESC || primary.PTYPE,
       bldgType:       primary.BLDG_TYPE || primary.R_BLDG_STYL,
       structureClass: primary.STRUCTURE_CLASS,
       grossArea:      primary.GROSS_AREA,

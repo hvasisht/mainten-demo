@@ -13,13 +13,13 @@ const HAS_API_KEY = GEMINI_KEY.length > 10 && !GEMINI_KEY.startsWith('your_')
 const genAI = HAS_API_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null
 
 async function geminiGenerate(prompt) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
   const result = await model.generateContent(prompt)
   return result.response.text().trim()
 }
 
 async function geminiChat(systemInstruction, messages) {
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash', systemInstruction })
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash', systemInstruction })
   const history = messages.slice(0, -1).map(m => ({
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],
