@@ -143,6 +143,26 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Subtitle */}
+        {!selectedAddress && (
+          <div style={{
+            marginTop: 14,
+            width: '100%', maxWidth: 680,
+            paddingLeft: 4,
+            pointerEvents: 'none',
+          }}>
+            <span style={{
+              fontFamily: 'Georgia, serif',
+              fontSize: 13,
+              color: 'rgba(200,180,120,0.55)',
+              letterSpacing: '0.02em',
+              fontStyle: 'italic',
+            }}>
+              AI-powered property intelligence for renters.
+            </span>
+          </div>
+        )}
+
         {/* Address pill */}
         {selectedAddress && (
           <div style={{
