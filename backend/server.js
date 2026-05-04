@@ -105,29 +105,100 @@ Icons: ⚡ for electrical, 🔧 for plumbing, ⚠ for hazards, 🔥 for structur
 }
 
 // ──────────────────────────────────────────────────────────────
+//  BOSTON SERVICE CONTACTS
+// ──────────────────────────────────────────────────────────────
+const BOSTON_CONTACTS = {
+  pest: {
+    label: 'Pest Control / Exterminator',
+    providers: [
+      { name: 'JP Pest Services',      phone: '1-800-222-2908', note: 'Covers Boston metro, same-day available' },
+      { name: "Slade's Pest Control",  phone: '(617) 327-0500', note: 'Family-run, South Boston based' },
+      { name: 'Catseye Pest Control',  phone: '(617) 340-1001', note: 'Rodent exclusion specialists' },
+    ],
+  },
+  plumbing: {
+    label: 'Licensed Plumber',
+    providers: [
+      { name: 'Boston Standard Company',   phone: '(617) 288-2911', note: '24/7 emergency, licensed & insured' },
+      { name: 'G&C Plumbing & Heating',    phone: '(617) 323-2422', note: 'Boston family-owned since 1958' },
+      { name: 'Rooter-Man Boston',         phone: '(617) 396-1550', note: 'Drain, sewer, pipe repairs' },
+    ],
+  },
+  electrical: {
+    label: 'Licensed Electrician',
+    providers: [
+      { name: 'APlus Electric',              phone: '(617) 765-7550', note: 'Licensed, Boston metro' },
+      { name: 'Century Electrical Services', phone: '(617) 782-0993', note: 'Knob-and-tube remediation specialist' },
+    ],
+  },
+  hvac: {
+    label: 'HVAC / Boiler Service',
+    providers: [
+      { name: 'Boston Standard Company', phone: '(617) 288-2911', note: 'Boiler service, steam systems, 24/7' },
+      { name: 'New England Mechanical',  phone: '(781) 935-1488', note: 'Residential & commercial HVAC' },
+    ],
+  },
+  roofing: {
+    label: 'Roofer',
+    providers: [
+      { name: 'Unified Roofing',      phone: '(617) 848-4755', note: 'Flat roof specialists, Boston triple-deckers' },
+      { name: 'Mass Roofing & Siding', phone: '(617) 698-2415', note: 'Licensed, free inspections' },
+    ],
+  },
+  general: {
+    label: 'General Contractor',
+    providers: [
+      { name: 'BuildZoom Boston', phone: 'buildzoom.com',  note: 'Vetted contractors with license checks' },
+      { name: 'Angi',             phone: 'angi.com',       note: 'Get 3 competing quotes from local pros' },
+    ],
+  },
+  tenant: {
+    label: 'Tenant Rights / Legal Help',
+    providers: [
+      { name: 'Greater Boston Legal Services',  phone: '(617) 603-1700', note: 'Free legal help for low-income tenants' },
+      { name: 'Boston Tenant Coalition',        phone: '(617) 522-2800', note: 'Tenant advocacy & resources' },
+      { name: 'MA AG Housing Hotline',          phone: '(617) 963-2197', note: 'File complaints about housing conditions' },
+    ],
+  },
+}
+
+function contactsBlock() {
+  return Object.values(BOSTON_CONTACTS).map(cat =>
+    `${cat.label}:\n` +
+    cat.providers.map(p => `  • ${p.name} — ${p.phone} (${p.note})`).join('\n')
+  ).join('\n\n')
+}
+
+// ──────────────────────────────────────────────────────────────
 //  ELEMENT CHAT PROMPT
 // ──────────────────────────────────────────────────────────────
 function buildChatSystemPrompt(propertyData, element) {
   const a = propertyData?.assessor || {}
   const yearBuilt = a.yearBuilt || 'unknown'
-  return `You are Mainten AI — a specialist property advisor with deep knowledge of Boston residential buildings.
+  return `You are Mainten AI — an expert property advisor for Boston renters. You can answer ANY question about this property, home maintenance, tenant rights, or finding help.
 
-You are talking about the ${element.name} in this specific property:
+PROPERTY CONTEXT:
 - Address: ${propertyData?.address || 'Unknown'}
 - Year Built: ${yearBuilt}
 - Building Type: ${a.luDesc || 'Residential'}
 - Heat Type: ${a.heatType || 'Unknown'}
 - Structure: ${a.structureClass || 'Unknown'}
 - Units: ${propertyData?.units?.count || 'Unknown'}
+- Currently discussing: ${element.name}
+- Element context: ${element.context}
 
-Element context: ${element.context}
+BOSTON SERVICE PROVIDERS (use these when the user asks for contacts, who to call, or how to fix something):
+${contactsBlock()}
 
 RULES:
-- Always reference the specific property (year built, building type, era-specific materials)
-- Be direct and practical — this person is a renter making real decisions
-- If asked about risk, state it clearly, then give actionable next steps
-- Keep responses under 150 words unless a detailed technical explanation is needed
-- Never start with "Great question" or filler — go straight to the answer`
+- Answer the user's ACTUAL QUESTION directly — do not default to generic element info
+- If they ask for a contact, contractor, or "who to call" → provide the relevant providers above with name and phone number
+- If they ask about pest issues (rats, mice, cockroaches, bugs) → recommend pest control contacts
+- If they ask about a repair → advise whether it's landlord vs tenant responsibility, then give contacts
+- Always reference this specific property (year built, construction era, building type)
+- Be direct and practical — this is a renter making real decisions
+- Keep responses under 200 words
+- Never start with "Great question" or filler`
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -214,23 +285,69 @@ app.post('/api/chat', async (req, res) => {
   if (!messages || !element) return res.status(400).json({ error: 'messages and element required' })
 
   if (!HAS_API_KEY) {
-    const demoReplies = {
-      'Boiler / Heating': `This building was constructed in 1914, making it almost certainly original to steam radiator heating — a cast iron boiler in the basement distributing heat through two-pipe steam. These systems are reliable when maintained but need annual bleeding of radiators and boiler water level checks. The hissing or knocking you sometimes hear is normal — radiators releasing air. Ask your landlord when the boiler was last serviced and whether the pressure relief valve has been tested. A well-maintained 1914 steam system can outlast modern equipment.`,
-      'Electrical Panel': `In a 1914 triple-decker, the original knob-and-tube wiring is the primary concern. Even if a 2019 electrical permit upgraded the service panel to 200A, the wiring inside the walls is almost certainly original. Knob-and-tube is not grounded, cannot handle modern loads safely, and most homeowner's insurance policies won't cover a home with it. You can identify it in the basement — look for white ceramic knobs stapled to joists with single wires running between them. Do not plug high-draw appliances into original outlets.`,
-      'Kitchen Sink / Pipes': `Without a plumbing permit on record, these pipes are almost certainly original galvanised iron — standard in 1914 Boston construction. After 110 years, galvanised develops interior corrosion that turns water slightly yellow and reduces pressure. If you see orange tint in cold water first thing in the morning, that's confirming it. The corrosion is not immediately dangerous but the pipes are near end of life. Document any water discolouration with photos and timestamps — this is a landlord responsibility.`,
-      'Bathroom': `The bathroom sits directly above the kitchen in a 1914 triple-decker stack — this is standard balloon frame layout with the plumbing chase running through all three floors. The cast iron drain stack is likely original and in decent condition (cast iron is extremely durable) but the supply lines are almost certainly galvanised. If you see evidence of past leaks on the ceiling below, document it immediately — this indicates the drain connections may need attention. The tile work and fixtures are almost certainly renovated.`,
-      'Front Wall': `This is a load-bearing balloon frame wall — the structural spine of the building running from foundation to roof plate. Do not under any circumstances drill into this wall without knowing what's behind it. In 1914 construction, the wall cavity runs continuously from basement to attic with no fire blocking. Wiring, pipes, and sometimes original gas lines run through these cavities. If you want to hang anything heavy, use a stud finder and drill into studs only. Never remove trim or open this wall without landlord permission.`,
-      'Roof Access': `The roof access stairwell in a Boston triple-decker is the building's fire egress priority. The roof itself is likely a flat tar-and-gravel or modified bitumen system — standard for this era and building type. If the roof was replaced or repaired recently per permits, check for the permit documentation. Signs of trouble to watch for: water staining on the top floor ceiling, soft spots near the stairwell roof hatch, or pooling water visible from outside. Report any ceiling staining immediately — water infiltration in a balloon frame building spreads fast.`,
+    // Read the actual user question
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')?.content?.toLowerCase() || ''
+    const address = propertyData?.address || 'this property'
+    const year = propertyData?.assessor?.yearBuilt || '1914'
+
+    function fmtContacts(cat) {
+      return BOSTON_CONTACTS[cat].providers
+        .map(p => `• ${p.name} — ${p.phone} (${p.note})`)
+        .join('\n')
     }
-    const key = Object.keys(demoReplies).find(k => element.name.includes(k.split(' ')[0])) || Object.keys(demoReplies)[0]
-    return res.json({ reply: demoReplies[key] })
+
+    // Contact / who to call requests
+    if (/contact|who.*(call|fix|hire)|phone|number|find.*someone|service|company|contractor|plumber|electrician|exterminator|pest|rat|mice|rodent|bug|cockroach/i.test(lastUserMsg)) {
+      if (/rat|mice|mouse|rodent|pest|bug|cockroach|insect|infestation|dead.*animal|animal.*dead/i.test(lastUserMsg)) {
+        return res.json({ reply: `**This is a landlord responsibility** under Massachusetts Sanitary Code (105 CMR 410.550) — rodent infestations must be eliminated at the owner's expense. Notify your landlord in writing immediately.\n\nIf they don't respond within 24 hours for active infestation:\n\n**Pest Control / Exterminator:**\n${fmtContacts('pest')}\n\nDocument everything — photo the evidence with timestamps. You can also file a complaint with Boston Inspectional Services at (617) 635-5300.` })
+      }
+      if (/plumb|pipe|leak|water|drain|toilet|sink|shower/i.test(lastUserMsg)) {
+        return res.json({ reply: `Plumbing repairs in a ${year} building are almost always **landlord responsibility** under Massachusetts Sanitary Code. Document the issue with photos and notify in writing.\n\n**Licensed Plumbers:**\n${fmtContacts('plumbing')}\n\nFor emergency leaks, call Boston Standard Company 24/7 at (617) 288-2911 and send the bill to your landlord if they're unresponsive.` })
+      }
+      if (/electric|wire|outlet|circuit|power|fuse|breaker/i.test(lastUserMsg)) {
+        return res.json({ reply: `Electrical issues in a pre-war building should always be treated as potential hazards. This is **landlord responsibility** for anything involving building wiring.\n\n**Licensed Electricians:**\n${fmtContacts('electrical')}\n\nIf you smell burning or see sparking, call 911 first. Then document and notify your landlord in writing.` })
+      }
+      if (/heat|boiler|hvac|furnace|radiator|steam|hot water/i.test(lastUserMsg)) {
+        return res.json({ reply: `Heating failures in Massachusetts are **urgent landlord responsibility** — required to maintain minimum 68°F (day) and 64°F (night) from Sept 15 – June 15.\n\n**HVAC / Boiler Service:**\n${fmtContacts('hvac')}\n\nIf your landlord doesn't respond to a heating failure within 24 hours, call Boston Inspectional Services at (617) 635-5300 immediately.` })
+      }
+      if (/roof|leak.*ceiling|ceiling.*leak|water.*upstairs/i.test(lastUserMsg)) {
+        return res.json({ reply: `Roof and water intrusion is **always landlord responsibility**. Document with timestamped photos from multiple angles.\n\n**Roofing Contractors:**\n${fmtContacts('roofing')}\n\nAlso contact:\n**General Contractors:**\n${fmtContacts('general')}` })
+      }
+      if (/landlord|tenant|right|evict|deposit|legal|law|complaint/i.test(lastUserMsg)) {
+        return res.json({ reply: `Massachusetts has some of the strongest tenant protections in the US. Here's who can help:\n\n**Tenant Rights & Legal Help:**\n${fmtContacts('tenant')}\n\nKey rights: landlord must maintain habitable conditions, 14-day repair notice, security deposit interest, no retaliation for complaints.` })
+      }
+      // Generic contact request
+      return res.json({ reply: `Here are the key Boston service providers for ${address}:\n\n**Pest Control:**\n${fmtContacts('pest')}\n\n**Plumbing:**\n${fmtContacts('plumbing')}\n\n**Electrical:**\n${fmtContacts('electrical')}\n\n**HVAC / Boiler:**\n${fmtContacts('hvac')}\n\n**General Contractor:**\n${fmtContacts('general')}\n\n**Tenant Rights Help:**\n${fmtContacts('tenant')}` })
+    }
+
+    // Landlord / responsibility questions
+    if (/landlord|responsib|who.*pay|my.*right|fix.*it|they.*fix|should.*fix/i.test(lastUserMsg)) {
+      return res.json({ reply: `Under Massachusetts Sanitary Code (105 CMR 410), landlords are responsible for maintaining all structural elements, mechanical systems, heat, hot water, and pest-free conditions. Tenants are responsible for damage they cause and keeping their unit clean.\n\nFor this ${year} building, anything involving the original building systems — plumbing, electrical, heating, roof — is almost certainly landlord responsibility. Always notify in writing (text or email) and keep a record. If they don't respond, file with Boston Inspectional Services: (617) 635-5300.` })
+    }
+
+    // Safety / hazard questions
+    if (/safe|danger|hazard|lead|asbestos|mold|carbon|smoke|fire/i.test(lastUserMsg)) {
+      return res.json({ reply: `In a ${year} Boston triple-decker, the main hazards to be aware of:\n\n**Lead paint** — assumed present in any pre-1978 building. Don't sand, scrape, or disturb painted surfaces. Landlord is legally required to disclose and deleach if children under 6 live there.\n\n**Carbon monoxide** — a steam boiler without CO detectors is a serious risk. Massachusetts requires CO detectors within 10 feet of each sleeping area. Verify yours are working.\n\n**Knob-and-tube wiring** — likely still present in wall cavities. Don't overload circuits. If you smell burning from outlets, call an electrician immediately: APlus Electric (617) 765-7550.` })
+    }
+
+    // Fallback — element context with actual question acknowledged
+    const elementContext = {
+      'Boiler':     `The ${year} steam boiler system distributes heat through cast iron radiators. These systems are durable but require annual maintenance — bleeding radiators, checking water levels, and testing the pressure relief valve. Ask your landlord for the last service date.`,
+      'Electrical': `A ${year} building almost certainly has original knob-and-tube wiring in the wall cavities even if the service panel was upgraded. This wiring is ungrounded and can't safely handle modern loads. Don't use high-draw appliances on original outlets.`,
+      'Kitchen':    `Pre-war galvanised iron pipes are standard in ${year} construction. After 100+ years they develop interior corrosion — watch for orange tint in cold water first thing in the morning. This is landlord responsibility to address.`,
+      'Bathroom':   `The bathroom plumbing chase runs through all three floors in this balloon frame building. The cast iron drain stack is durable but supply lines are likely original galvanised. Document any ceiling stains below — they indicate drain issues.`,
+      'Wall':       `Load-bearing balloon frame walls run continuously from basement to roof with no fire blocking. Don't drill or cut without knowing what's behind. Use a stud finder and only anchor into studs.`,
+      'Roof':       `Flat roofs on Boston triple-deckers are typically modified bitumen or tar-and-gravel. Watch for ceiling stains on the top floor — water infiltration in balloon frame construction spreads fast.`,
+    }
+    const key = Object.keys(elementContext).find(k => element.name.toLowerCase().includes(k.toLowerCase())) || 'Bathroom'
+    return res.json({ reply: `${elementContext[key]}\n\nIs there something specific you'd like to know about this? I can also give you contacts for repair services.` })
   }
 
   try {
     const systemPrompt = buildChatSystemPrompt(propertyData, element)
     const message = await anthropic.messages.create({
       model: 'claude-opus-4-6',
-      max_tokens: 400,
+      max_tokens: 600,
       system: systemPrompt,
       messages: messages.map(m => ({ role: m.role, content: m.content })),
     })

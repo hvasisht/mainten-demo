@@ -10,6 +10,18 @@ const INITIAL_MESSAGES = {
   roof: "The roof is the building's first line of defence. What do you want to know?",
 }
 
+function renderMarkdown(text) {
+  // Bold **text**
+  let html = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+  // Bullet points starting with • or -
+  html = html.replace(/^[•\-] (.+)/gm, '<li>$1</li>')
+  html = html.replace(/(<li>.*<\/li>)/gs, '<ul style="margin:4px 0 4px 14px;padding:0">$1</ul>')
+  // Paragraph breaks
+  html = html.replace(/\n\n/g, '</p><p style="margin:6px 0">')
+  html = html.replace(/\n/g, '<br/>')
+  return `<p style="margin:0">${html}</p>`
+}
+
 function MessageBubble({ msg }) {
   const isUser = msg.role === 'user'
   return (
@@ -41,7 +53,10 @@ function MessageBubble({ msg }) {
         color: isUser ? colors.amberLight : 'rgba(245,240,232,0.85)',
         lineHeight: 1.65,
       }}>
-        {msg.content}
+        {isUser
+          ? msg.content
+          : <div dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }} />
+        }
       </div>
     </div>
   )
@@ -269,7 +284,7 @@ export default function ChatPanel({ element, propertyData, visible, onClose, onR
             ref={inputRef}
             value={input}
             onChange={e => setInput(e.target.value)}
-            placeholder="Ask about this element..."
+            placeholder="Ask anything — repairs, contacts, rights…"
             disabled={loading}
             style={{
               flex: 1,
