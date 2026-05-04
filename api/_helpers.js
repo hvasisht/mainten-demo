@@ -24,10 +24,16 @@ async function geminiChat(systemInstruction, messages) {
     systemInstruction,
   })
   // All messages except the last go into history
-  const history = messages.slice(0, -1).map(m => ({
+  const allHistory = messages.slice(0, -1).map(m => ({
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],
   }))
+  // Gemini requires history to start with 'user' — drop any leading model turns
+  // (the initial AI greeting shown in the UI isn't needed in API history)
+  let start = 0
+  while (start < allHistory.length && allHistory[start].role === 'model') start++
+  const history = allHistory.slice(start)
+
   const lastMsg = messages[messages.length - 1]
   const chat = model.startChat({ history })
   const result = await chat.sendMessage(lastMsg.content)
