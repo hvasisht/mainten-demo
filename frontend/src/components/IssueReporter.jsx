@@ -1,6 +1,100 @@
 import { useState } from 'react'
 import { colors } from '../tokens'
 
+const TOOL_LABELS = {
+  assess_construction_risk: { icon: '🏗', label: 'Construction risk assessed' },
+  lookup_housing_regulation: { icon: '⚖', label: 'Housing regulation retrieved' },
+  get_service_contacts: { icon: '📞', label: 'Service contacts found' },
+}
+
+const AGENT_STEPS = [
+  'Consulting MA housing regulations...',
+  'Assessing construction-era risks...',
+  'Cross-referencing permit history...',
+  'Determining responsibility...',
+  'Compiling diagnosis...',
+]
+
+function AgentTrace({ toolsUsed, source }) {
+  const [open, setOpen] = useState(false)
+  if (!toolsUsed || toolsUsed.length === 0) return null
+  const isClaude = source === 'claude-agent'
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          background: 'none', border: 'none', cursor: 'pointer',
+          padding: '4px 0', width: '100%',
+        }}
+      >
+        <div style={{
+          fontFamily: 'ui-monospace, monospace', fontSize: 9,
+          letterSpacing: '0.12em', color: isClaude ? '#c17f58' : colors.gunmetal,
+          textTransform: 'uppercase', flex: 1, textAlign: 'left',
+        }}>
+          {isClaude ? '🤖 Agent Trace' : 'Tool Calls'} — {toolsUsed.length} tool{toolsUsed.length !== 1 ? 's' : ''} used
+        </div>
+        <svg
+          width="10" height="10" viewBox="0 0 10 10" fill="none"
+          style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }}
+        >
+          <path d="M2 3.5l3 3 3-3" stroke={isClaude ? '#c17f58' : colors.gunmetal} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
+          {toolsUsed.map((t, i) => {
+            const meta = TOOL_LABELS[t.tool] || { icon: '🔧', label: t.tool }
+            const detail = t.result?.detail || t.result?.rule || t.result?.summary || ''
+            const level = t.result?.level
+            const levelColor = level === 'HIGH' ? colors.riskOrange : level === 'MEDIUM' ? colors.amber : level === 'LOW' ? '#5A8060' : colors.gunmetal
+            return (
+              <div key={i} style={{
+                background: 'rgba(255,255,255,0.03)',
+                border: `1px solid ${colors.gunmetal}44`,
+                borderRadius: 8, padding: '8px 10px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: detail ? 4 : 0 }}>
+                  <span style={{ fontSize: 12 }}>{meta.icon}</span>
+                  <span style={{
+                    fontFamily: 'ui-monospace, monospace', fontSize: 8,
+                    letterSpacing: '0.08em', color: 'rgba(245,240,232,0.6)',
+                    flex: 1,
+                  }}>{meta.label}</span>
+                  {level && (
+                    <span style={{
+                      fontFamily: 'ui-monospace, monospace', fontSize: 7,
+                      color: levelColor, border: `1px solid ${levelColor}66`,
+                      background: `${levelColor}18`, borderRadius: 3, padding: '2px 5px',
+                      letterSpacing: '0.08em',
+                    }}>{level}</span>
+                  )}
+                </div>
+                {detail && (
+                  <div style={{
+                    fontFamily: 'Georgia, serif', fontSize: 11,
+                    color: 'rgba(245,240,232,0.45)', lineHeight: 1.55,
+                    marginLeft: 18,
+                  }}>{detail.length > 120 ? detail.slice(0, 120) + '…' : detail}</div>
+                )}
+              </div>
+            )
+          })}
+          <div style={{
+            fontFamily: 'ui-monospace, monospace', fontSize: 8,
+            color: colors.gunmetal, letterSpacing: '0.06em',
+            marginTop: 2, paddingLeft: 2,
+          }}>
+            {isClaude ? 'Powered by Claude (Anthropic) · ReAct agent pattern' : 'Powered by Gemini · Tool simulation'}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const URGENCY_COLORS = {
   URGENT: { bg: '#C4702022', border: '#C47020', text: '#C47020', label: 'URGENT' },
   SOON:   { bg: '#D4920A18', border: '#D4920A', text: '#D4920A', label: 'SOON' },
@@ -28,20 +122,31 @@ export default function IssueReporter({ element, propertyData, visible, onClose 
   const [step, setStep] = useState('input')   // input | diagnosing | result
   const [issueText, setIssueText] = useState('')
   const [diagnosis, setDiagnosis] = useState(null)
+  const [toolsUsed, setToolsUsed] = useState([])
+  const [agentSource, setAgentSource] = useState('')
   const [copied, setCopied] = useState(false)
+  const [agentStepIdx, setAgentStepIdx] = useState(0)
 
   function handleClose() {
     setStep('input')
     setIssueText('')
     setDiagnosis(null)
+    setToolsUsed([])
+    setAgentSource('')
+    setAgentStepIdx(0)
     onClose?.()
   }
 
   async function runDiagnosis() {
     if (!issueText.trim()) return
     setStep('diagnosing')
+    setAgentStepIdx(0)
+    // Animate through agent step labels while waiting
+    const interval = setInterval(() => {
+      setAgentStepIdx(i => (i + 1) % AGENT_STEPS.length)
+    }, 1400)
     try {
-      const res = await fetch('/api/diagnose', {
+      const res = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -51,9 +156,13 @@ export default function IssueReporter({ element, propertyData, visible, onClose 
         }),
       })
       const data = await res.json()
+      clearInterval(interval)
       setDiagnosis(data.diagnosis)
+      setToolsUsed(data.toolsUsed || [])
+      setAgentSource(data.source || '')
       setStep('result')
     } catch {
+      clearInterval(interval)
       setDiagnosis({
         diagnosis: 'Unable to diagnose at this time. Try again in a moment.',
         responsibility: 'LANDLORD',
@@ -64,6 +173,7 @@ export default function IssueReporter({ element, propertyData, visible, onClose 
         diyPossible: false,
         diyNote: 'Seek professional assessment.',
       })
+      setToolsUsed([])
       setStep('result')
     }
   }
@@ -126,11 +236,21 @@ export default function IssueReporter({ element, propertyData, visible, onClose 
         }}>
           <span style={{ fontSize: 18 }}>{element?.icon}</span>
           <div style={{ flex: 1 }}>
-            <div style={{
-              fontFamily: 'ui-monospace, monospace', fontSize: 9,
-              color: colors.amber, letterSpacing: '0.14em',
-              textTransform: 'uppercase', marginBottom: 2,
-            }}>Report Issue</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+              <div style={{
+                fontFamily: 'ui-monospace, monospace', fontSize: 9,
+                color: colors.amber, letterSpacing: '0.14em',
+                textTransform: 'uppercase',
+              }}>Report Issue</div>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 3,
+                background: 'rgba(193,127,88,0.12)',
+                border: '1px solid rgba(193,127,88,0.35)',
+                borderRadius: 3, padding: '1px 4px',
+              }}>
+                <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 6, color: 'rgba(193,127,88,0.9)', letterSpacing: '0.06em' }}>Claude Agent</span>
+              </div>
+            </div>
             <div style={{
               fontFamily: 'Georgia, serif', fontSize: 14, color: colors.warmWhite,
             }}>{element?.name}</div>
@@ -204,24 +324,31 @@ export default function IssueReporter({ element, propertyData, visible, onClose 
           {/* ─── DIAGNOSING ─── */}
           {step === 'diagnosing' && (
             <div style={{
-              padding: '40px 16px',
+              padding: '36px 16px',
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14,
             }}>
               <div style={{
-                width: 40, height: 40, borderRadius: '50%',
-                border: `2px solid ${colors.amber}44`,
-                borderTop: `2px solid ${colors.amber}`,
+                width: 36, height: 36, borderRadius: '50%',
+                border: `2px solid #c17f5844`,
+                borderTop: `2px solid #c17f58`,
                 animation: 'spin 0.8s linear infinite',
               }} />
               <div style={{
-                fontFamily: 'ui-monospace, monospace', fontSize: 10,
-                color: colors.amber, letterSpacing: '0.1em',
-              }}>DIAGNOSING ISSUE</div>
+                fontFamily: 'ui-monospace, monospace', fontSize: 9,
+                color: '#c17f58', letterSpacing: '0.12em', textTransform: 'uppercase',
+              }}>Agent Running</div>
               <div style={{
                 fontFamily: 'Georgia, serif', fontSize: 12,
-                color: 'rgba(245,240,232,0.45)', textAlign: 'center', lineHeight: 1.6,
+                color: 'rgba(245,240,232,0.55)', textAlign: 'center', lineHeight: 1.6,
+                minHeight: 20, transition: 'opacity 0.4s',
               }}>
-                Cross-referencing property construction era,<br />permit history, and building systems...
+                {AGENT_STEPS[agentStepIdx]}
+              </div>
+              <div style={{
+                fontFamily: 'ui-monospace, monospace', fontSize: 8,
+                color: 'rgba(245,240,232,0.25)', letterSpacing: '0.06em', textAlign: 'center',
+              }}>
+                Claude · ReAct agent · tool use
               </div>
             </div>
           )}
@@ -309,9 +436,12 @@ export default function IssueReporter({ element, propertyData, visible, onClose 
                 </Section>
               )}
 
+              {/* Agent trace */}
+              <AgentTrace toolsUsed={toolsUsed} source={agentSource} />
+
               {/* New issue button */}
               <button
-                onClick={() => { setStep('input'); setIssueText(''); setDiagnosis(null) }}
+                onClick={() => { setStep('input'); setIssueText(''); setDiagnosis(null); setToolsUsed([]); setAgentSource('') }}
                 style={{
                   marginTop: 4, width: '100%',
                   background: 'transparent',

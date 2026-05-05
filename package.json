@@ -4,6 +4,7 @@
   "description": "Mainten — Keep Your Home at 10",
   "private": true,
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.92.0",
     "@google/generative-ai": "^0.24.1",
     "node-fetch": "^2.7.0"
   }
