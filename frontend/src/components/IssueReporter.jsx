@@ -15,10 +15,9 @@ const AGENT_STEPS = [
   'Compiling diagnosis...',
 ]
 
-function AgentTrace({ toolsUsed, source }) {
+function AgentTrace({ toolsUsed }) {
   const [open, setOpen] = useState(false)
   if (!toolsUsed || toolsUsed.length === 0) return null
-  const isClaude = source === 'claude-agent'
   return (
     <div style={{ marginBottom: 14 }}>
       <button
@@ -31,16 +30,16 @@ function AgentTrace({ toolsUsed, source }) {
       >
         <div style={{
           fontFamily: 'ui-monospace, monospace', fontSize: 9,
-          letterSpacing: '0.12em', color: isClaude ? '#c17f58' : colors.gunmetal,
+          letterSpacing: '0.12em', color: '#4285F4',
           textTransform: 'uppercase', flex: 1, textAlign: 'left',
         }}>
-          {isClaude ? '🤖 Agent Trace' : 'Tool Calls'} — {toolsUsed.length} tool{toolsUsed.length !== 1 ? 's' : ''} used
+          🤖 Agent Trace — {toolsUsed.length} tool{toolsUsed.length !== 1 ? 's' : ''} used
         </div>
         <svg
           width="10" height="10" viewBox="0 0 10 10" fill="none"
           style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }}
         >
-          <path d="M2 3.5l3 3 3-3" stroke={isClaude ? '#c17f58' : colors.gunmetal} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M2 3.5l3 3 3-3" stroke="#4285F4" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
       {open && (
@@ -87,7 +86,7 @@ function AgentTrace({ toolsUsed, source }) {
             color: colors.gunmetal, letterSpacing: '0.06em',
             marginTop: 2, paddingLeft: 2,
           }}>
-            {isClaude ? 'Powered by Claude (Anthropic) · ReAct agent pattern' : 'Powered by Gemini · Tool simulation'}
+            Mainten Agent · Gemini · ReAct agent pattern · function calling
           </div>
         </div>
       )}
@@ -244,11 +243,11 @@ export default function IssueReporter({ element, propertyData, visible, onClose 
               }}>Report Issue</div>
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 3,
-                background: 'rgba(193,127,88,0.12)',
-                border: '1px solid rgba(193,127,88,0.35)',
+                background: 'rgba(66,133,244,0.12)',
+                border: '1px solid rgba(66,133,244,0.35)',
                 borderRadius: 3, padding: '1px 4px',
               }}>
-                <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 6, color: 'rgba(193,127,88,0.9)', letterSpacing: '0.06em' }}>Claude Agent</span>
+                <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 6, color: 'rgba(66,133,244,0.9)', letterSpacing: '0.06em' }}>Mainten Agent</span>
               </div>
             </div>
             <div style={{
@@ -329,14 +328,14 @@ export default function IssueReporter({ element, propertyData, visible, onClose 
             }}>
               <div style={{
                 width: 36, height: 36, borderRadius: '50%',
-                border: `2px solid #c17f5844`,
-                borderTop: `2px solid #c17f58`,
+                border: `2px solid rgba(66,133,244,0.3)`,
+                borderTop: `2px solid #4285F4`,
                 animation: 'spin 0.8s linear infinite',
               }} />
               <div style={{
                 fontFamily: 'ui-monospace, monospace', fontSize: 9,
-                color: '#c17f58', letterSpacing: '0.12em', textTransform: 'uppercase',
-              }}>Agent Running</div>
+                color: '#4285F4', letterSpacing: '0.12em', textTransform: 'uppercase',
+              }}>Mainten Agent Running</div>
               <div style={{
                 fontFamily: 'Georgia, serif', fontSize: 12,
                 color: 'rgba(245,240,232,0.55)', textAlign: 'center', lineHeight: 1.6,
@@ -348,7 +347,7 @@ export default function IssueReporter({ element, propertyData, visible, onClose 
                 fontFamily: 'ui-monospace, monospace', fontSize: 8,
                 color: 'rgba(245,240,232,0.25)', letterSpacing: '0.06em', textAlign: 'center',
               }}>
-                Claude · ReAct agent · tool use
+                Gemini · ReAct agent · function calling
               </div>
             </div>
           )}
@@ -437,7 +436,7 @@ export default function IssueReporter({ element, propertyData, visible, onClose 
               )}
 
               {/* Agent trace */}
-              <AgentTrace toolsUsed={toolsUsed} source={agentSource} />
+              <AgentTrace toolsUsed={toolsUsed} />
 
               {/* New issue button */}
               <button

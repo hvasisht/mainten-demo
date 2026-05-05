@@ -1,23 +1,21 @@
 /**
- * Mainten AI Agent — Claude-powered ReAct agent with tool use
+ * Mainten Agent — Gemini-powered ReAct agent with tool use (function calling)
  *
  * GenAI Concepts Demonstrated:
  *   - Agent systems (ReAct pattern: Reason → Act → Observe loop)
- *   - Tool use / Function calling (Claude tools API)
- *   - Claude API (Anthropic SDK)
+ *   - Tool use / Function calling (Gemini function declarations)
  *   - Simulated RAG (knowledge base retrieval via tool)
  *   - Structured output (JSON-schema enforced diagnosis)
  *
  * Course: DADS5250-GenAI
  */
 
-const Anthropic = require('@anthropic-ai/sdk')
-const { BOSTON_CONTACTS, DEMO_DIAGNOSIS, geminiGenerate, buildDiagnosisPrompt, stripJson } = require('./_helpers')
+const { GoogleGenerativeAI } = require('@google/generative-ai')
+const { BOSTON_CONTACTS, DEMO_DIAGNOSIS, buildDiagnosisPrompt, stripJson } = require('./_helpers')
 
-const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || ''
-const HAS_CLAUDE = ANTHROPIC_KEY.length > 10 && !ANTHROPIC_KEY.startsWith('your_')
-
-const anthropic = HAS_CLAUDE ? new Anthropic({ apiKey: ANTHROPIC_KEY }) : null
+const GEMINI_KEY = process.env.GEMINI_API_KEY || ''
+const HAS_API_KEY = GEMINI_KEY.length > 10 && !GEMINI_KEY.startsWith('your_')
+const genAI = HAS_API_KEY ? new GoogleGenerativeAI(GEMINI_KEY) : null
 
 // ──────────────────────────────────────────────────────────────
 //  KNOWLEDGE BASE — Simulated RAG for MA Housing Regulations
@@ -72,7 +70,6 @@ const HOUSING_REGULATIONS = {
 }
 
 // Construction-era risk knowledge base — retrieved by system + year_built
-// Simulates a RAG retrieval for "what are the risks of [system] in a [era] building?"
 const CONSTRUCTION_RISKS = {
   electrical: {
     pre1940: { level: 'HIGH',   detail: 'Knob-and-tube wiring almost certainly present in wall cavities. Cannot be insulated. Not covered by modern homeowners insurance. Typical panel is 60 amps vs modern 200 amp minimum.' },
@@ -113,75 +110,77 @@ function getConstructionEra(yearBuilt) {
 }
 
 // ──────────────────────────────────────────────────────────────
-//  TOOL DEFINITIONS (Claude tools API schema)
+//  TOOL DEFINITIONS (Gemini function declarations format)
 // ──────────────────────────────────────────────────────────────
-const AGENT_TOOLS = [
-  {
-    name: 'lookup_housing_regulation',
-    description: 'Retrieves Massachusetts housing law and Sanitary Code (105 CMR 410) for a specific topic. Use this to determine landlord vs tenant responsibility and get the legal code reference and recommended tenant action.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        topic: {
-          type: 'string',
-          enum: ['heat', 'pests', 'repairs', 'lead_paint', 'electrical', 'plumbing', 'general'],
-          description: 'The housing regulation topic to retrieve',
+const AGENT_TOOLS = [{
+  functionDeclarations: [
+    {
+      name: 'lookup_housing_regulation',
+      description: 'Retrieves Massachusetts housing law and Sanitary Code (105 CMR 410) for a specific topic. Use this to determine landlord vs tenant responsibility and get the legal code reference.',
+      parameters: {
+        type: 'object',
+        properties: {
+          topic: {
+            type: 'string',
+            enum: ['heat', 'pests', 'repairs', 'lead_paint', 'electrical', 'plumbing', 'general'],
+            description: 'The housing regulation topic to retrieve',
+          },
         },
+        required: ['topic'],
       },
-      required: ['topic'],
     },
-  },
-  {
-    name: 'assess_construction_risk',
-    description: 'Assesses health, safety, and maintenance risk for a specific building system based on the construction era. Use this to understand what hazards are likely given when the building was built. Always call this for issues involving electrical, plumbing, HVAC, lead paint, asbestos, or structural concerns.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        year_built: {
-          type: 'number',
-          description: 'Year the building was constructed (use 0 if unknown, which defaults to pre-1940 assessment)',
+    {
+      name: 'assess_construction_risk',
+      description: 'Assesses health, safety, and maintenance risk for a specific building system based on the construction era. Always call this for issues involving electrical, plumbing, HVAC, lead paint, asbestos, or structural concerns.',
+      parameters: {
+        type: 'object',
+        properties: {
+          year_built: {
+            type: 'number',
+            description: 'Year the building was constructed (use 0 if unknown)',
+          },
+          system: {
+            type: 'string',
+            enum: ['electrical', 'plumbing', 'lead_paint', 'asbestos', 'hvac', 'structural'],
+            description: 'Building system to assess risk for',
+          },
         },
-        system: {
-          type: 'string',
-          enum: ['electrical', 'plumbing', 'lead_paint', 'asbestos', 'hvac', 'structural'],
-          description: 'Building system to assess risk for',
-        },
+        required: ['year_built', 'system'],
       },
-      required: ['year_built', 'system'],
     },
-  },
-  {
-    name: 'get_service_contacts',
-    description: 'Returns Boston-area licensed service provider contacts for a specific trade. Use this when the issue requires professional service or when the user needs to know who to call.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        category: {
-          type: 'string',
-          enum: ['plumbing', 'electrical', 'hvac', 'pest', 'roofing', 'general', 'tenant'],
-          description: 'Service trade category',
+    {
+      name: 'get_service_contacts',
+      description: 'Returns Boston-area licensed service provider contacts for a specific trade. Use this when professional service is needed.',
+      parameters: {
+        type: 'object',
+        properties: {
+          category: {
+            type: 'string',
+            enum: ['plumbing', 'electrical', 'hvac', 'pest', 'roofing', 'general', 'tenant'],
+            description: 'Service trade category',
+          },
         },
+        required: ['category'],
       },
-      required: ['category'],
     },
-  },
-]
+  ],
+}]
 
 // ──────────────────────────────────────────────────────────────
 //  TOOL EXECUTORS
 // ──────────────────────────────────────────────────────────────
-function executeTool(name, input) {
+function executeTool(name, args) {
   if (name === 'lookup_housing_regulation') {
-    return HOUSING_REGULATIONS[input.topic] || HOUSING_REGULATIONS.general
+    return HOUSING_REGULATIONS[args.topic] || HOUSING_REGULATIONS.general
   }
   if (name === 'assess_construction_risk') {
-    const systemRisks = CONSTRUCTION_RISKS[input.system]
+    const systemRisks = CONSTRUCTION_RISKS[args.system]
     if (!systemRisks) return { level: 'UNKNOWN', detail: 'System not in knowledge base.' }
-    const era = getConstructionEra(input.year_built)
-    return { era, yearBuilt: input.year_built, ...systemRisks[era] }
+    const era = getConstructionEra(args.year_built)
+    return { era, yearBuilt: args.year_built, ...systemRisks[era] }
   }
   if (name === 'get_service_contacts') {
-    const cat = BOSTON_CONTACTS[input.category]
+    const cat = BOSTON_CONTACTS[args.category]
     if (!cat) return { error: 'Category not found' }
     return { label: cat.label, providers: cat.providers }
   }
@@ -189,8 +188,8 @@ function executeTool(name, input) {
 }
 
 // ──────────────────────────────────────────────────────────────
-//  CLAUDE REACT AGENT LOOP
-//  Pattern: Reason → Act (tool call) → Observe (tool result) → repeat
+//  GEMINI REACT AGENT LOOP
+//  Pattern: Reason → Act (function call) → Observe (result) → repeat
 //  Max 6 iterations to prevent runaway loops
 // ──────────────────────────────────────────────────────────────
 async function runDiagnosisAgent(issue, element, propertyData) {
@@ -201,7 +200,7 @@ async function runDiagnosisAgent(issue, element, propertyData) {
     .map(r => `${r.issuedDate?.slice(0, 4) || '?'}: ${r.type} — ${r.description || 'N/A'}`)
     .join('\n') || 'None on record'
 
-  const systemPrompt = `You are Mainten, an AI property intelligence agent specializing in Boston residential properties. You help renters understand maintenance issues, determine responsibility under Massachusetts law, and get professional help.
+  const systemInstruction = `You are Mainten Agent, an AI property intelligence agent specializing in Boston residential properties. You help renters understand maintenance issues, determine responsibility under Massachusetts law, and get professional help.
 
 You MUST use your tools to gather evidence before forming your diagnosis:
 1. Call assess_construction_risk to understand hazards given the building's age
@@ -233,45 +232,44 @@ Issue described: "${issue}"
 
 Research this issue using your tools, then output your diagnosis JSON.`
 
-  const messages = [{ role: 'user', content: userMessage }]
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-2.5-flash',
+    systemInstruction,
+    tools: AGENT_TOOLS,
+  })
+
+  const chat = model.startChat()
   const toolsUsed = []
 
+  let result = await chat.sendMessage(userMessage)
+
+  // ReAct agent loop — keep going while Gemini wants to call functions
   for (let iteration = 0; iteration < 6; iteration++) {
-    const response = await anthropic.messages.create({
-      model: 'claude-opus-4-6',
-      max_tokens: 1500,
-      system: systemPrompt,
-      tools: AGENT_TOOLS,
-      messages,
-    })
+    const response = result.response
+    const functionCalls = response.functionCalls()
 
-    // Agent has finished reasoning — extract the JSON diagnosis
-    if (response.stop_reason === 'end_turn') {
-      const textBlock = response.content.find(b => b.type === 'text')
-      if (textBlock) {
-        const cleaned = textBlock.text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim()
-        return { diagnosis: JSON.parse(cleaned), toolsUsed }
-      }
-      break
+    // No more function calls — agent has finished reasoning
+    if (!functionCalls || functionCalls.length === 0) {
+      const text = response.text().trim()
+      const cleaned = text.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim()
+      return { diagnosis: JSON.parse(cleaned), toolsUsed }
     }
 
-    // Agent wants to use tools — execute them and feed results back
-    if (response.stop_reason === 'tool_use') {
-      messages.push({ role: 'assistant', content: response.content })
-
-      const toolResults = []
-      for (const block of response.content) {
-        if (block.type !== 'tool_use') continue
-        const result = executeTool(block.name, block.input)
-        toolsUsed.push({ tool: block.name, input: block.input, result })
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: block.id,
-          content: JSON.stringify(result),
-        })
-      }
-      messages.push({ role: 'user', content: toolResults })
+    // Execute each tool the agent called and collect results
+    const functionResponses = []
+    for (const call of functionCalls) {
+      const toolResult = executeTool(call.name, call.args)
+      toolsUsed.push({ tool: call.name, input: call.args, result: toolResult })
+      functionResponses.push({
+        functionResponse: {
+          name: call.name,
+          response: toolResult,
+        },
+      })
     }
+
+    // Feed tool results back to the agent
+    result = await chat.sendMessage(functionResponses)
   }
 
   throw new Error('Agent loop ended without producing a diagnosis')
@@ -291,7 +289,7 @@ module.exports = async (req, res) => {
   if (!issue || !element) return res.status(400).json({ error: 'issue and element required' })
 
   // Demo mode — no API key
-  if (!HAS_CLAUDE) {
+  if (!HAS_API_KEY) {
     return res.json({
       diagnosis: DEMO_DIAGNOSIS(element.name, issue, propertyData?.address),
       toolsUsed: [
@@ -304,16 +302,17 @@ module.exports = async (req, res) => {
 
   try {
     const { diagnosis, toolsUsed } = await runDiagnosisAgent(issue, element, propertyData)
-    res.json({ diagnosis, toolsUsed, source: 'claude-agent' })
+    res.json({ diagnosis, toolsUsed, source: 'mainten-agent' })
   } catch (err) {
-    console.error('[agent] Claude agent failed:', err.message)
-    // Graceful fallback to Gemini single-shot diagnosis
+    console.error('[agent] Mainten Agent failed:', err.message)
+    // Graceful fallback to single-shot Gemini diagnosis
     try {
+      const { geminiGenerate } = require('./_helpers')
       const text = await geminiGenerate(buildDiagnosisPrompt(propertyData, element, issue))
       const diagnosis = JSON.parse(stripJson(text))
       res.json({ diagnosis, toolsUsed: [], source: 'gemini-fallback' })
     } catch (fallbackErr) {
-      console.error('[agent] Gemini fallback also failed:', fallbackErr.message)
+      console.error('[agent] Fallback also failed:', fallbackErr.message)
       res.json({
         diagnosis: DEMO_DIAGNOSIS(element.name, issue, propertyData?.address),
         toolsUsed: [],
