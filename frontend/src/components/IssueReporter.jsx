@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { colors } from '../tokens'
 
 const TOOL_LABELS = {
@@ -8,6 +8,7 @@ const TOOL_LABELS = {
 }
 
 const AGENT_STEPS = [
+  'Analyzing photo...',
   'Consulting MA housing regulations...',
   'Assessing construction-era risks...',
   'Cross-referencing permit history...',
@@ -125,6 +126,11 @@ export default function IssueReporter({ element, propertyData, visible, onClose 
   const [agentSource, setAgentSource] = useState('')
   const [copied, setCopied] = useState(false)
   const [agentStepIdx, setAgentStepIdx] = useState(0)
+  const [imagePreview, setImagePreview] = useState(null)
+  const [imageBase64, setImageBase64] = useState(null)
+  const [imageMimeType, setImageMimeType] = useState(null)
+  const [hasImageResult, setHasImageResult] = useState(false)
+  const fileInputRef = useRef(null)
 
   function handleClose() {
     setStep('input')
@@ -133,7 +139,35 @@ export default function IssueReporter({ element, propertyData, visible, onClose 
     setToolsUsed([])
     setAgentSource('')
     setAgentStepIdx(0)
+    setImagePreview(null)
+    setImageBase64(null)
+    setImageMimeType(null)
+    setHasImageResult(false)
     onClose?.()
+  }
+
+  function handleImageSelect(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    if (file.size > 3.5 * 1024 * 1024) {
+      alert('Image too large — please use a photo under 3.5 MB.')
+      return
+    }
+    setImagePreview(URL.createObjectURL(file))
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const dataUrl = ev.target.result           // e.g. "data:image/jpeg;base64,/9j/..."
+      setImageBase64(dataUrl.split(',')[1])       // strip the prefix, keep raw base64
+      setImageMimeType(file.type)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  function removeImage() {
+    setImagePreview(null)
+    setImageBase64(null)
+    setImageMimeType(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   async function runDiagnosis() {
@@ -152,6 +186,8 @@ export default function IssueReporter({ element, propertyData, visible, onClose 
           issue: issueText.trim(),
           propertyData,
           element: { name: element.name, context: element.context },
+          imageBase64: imageBase64 || null,
+          imageMimeType: imageMimeType || null,
         }),
       })
       const data = await res.json()
@@ -159,6 +195,7 @@ export default function IssueReporter({ element, propertyData, visible, onClose 
       setDiagnosis(data.diagnosis)
       setToolsUsed(data.toolsUsed || [])
       setAgentSource(data.source || '')
+      setHasImageResult(data.hasImage || false)
       setStep('result')
     } catch {
       clearInterval(interval)
@@ -299,6 +336,67 @@ export default function IssueReporter({ element, propertyData, visible, onClose 
                 onFocus={e => e.currentTarget.style.borderColor = colors.amber}
                 onBlur={e => e.currentTarget.style.borderColor = colors.gunmetal}
               />
+
+              {/* ── Photo attachment ── */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleImageSelect}
+                style={{ display: 'none' }}
+              />
+              {imagePreview ? (
+                <div style={{ marginTop: 10, position: 'relative', display: 'inline-block' }}>
+                  <img
+                    src={imagePreview}
+                    alt="Issue photo"
+                    style={{
+                      width: 80, height: 80, objectFit: 'cover',
+                      borderRadius: 8,
+                      border: `1.5px solid #4285F444`,
+                    }}
+                  />
+                  <button
+                    onClick={removeImage}
+                    style={{
+                      position: 'absolute', top: -6, right: -6,
+                      width: 18, height: 18, borderRadius: '50%',
+                      background: colors.carbon,
+                      border: `1px solid ${colors.gunmetal}`,
+                      color: colors.warmWhite, fontSize: 10,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      cursor: 'pointer', lineHeight: 1,
+                    }}
+                  >×</button>
+                  <div style={{
+                    marginTop: 4,
+                    fontFamily: 'ui-monospace, monospace', fontSize: 7,
+                    color: '#4285F4', letterSpacing: '0.06em',
+                  }}>📷 Visual analysis on</div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    marginTop: 10,
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    background: 'transparent',
+                    border: `1px dashed ${colors.gunmetal}`,
+                    borderRadius: 8, padding: '7px 12px',
+                    cursor: 'pointer', transition: 'border-color 0.15s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = '#4285F4'}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = colors.gunmetal}
+                >
+                  <span style={{ fontSize: 13 }}>📷</span>
+                  <span style={{
+                    fontFamily: 'ui-monospace, monospace', fontSize: 8,
+                    color: colors.gunmetal, letterSpacing: '0.08em',
+                  }}>ATTACH PHOTO (OPTIONAL)</span>
+                </button>
+              )}
+
               <button
                 onClick={runDiagnosis}
                 disabled={!issueText.trim()}
@@ -315,7 +413,7 @@ export default function IssueReporter({ element, propertyData, visible, onClose 
                   transition: 'background 0.2s',
                 }}
               >
-                Diagnose Issue
+                {imagePreview ? 'Diagnose Issue + Photo' : 'Diagnose Issue'}
               </button>
             </div>
           )}
@@ -355,6 +453,23 @@ export default function IssueReporter({ element, propertyData, visible, onClose 
           {/* ─── RESULT ─── */}
           {step === 'result' && diagnosis && (
             <div style={{ padding: '16px 16px 20px' }}>
+
+              {/* Visual analysis badge */}
+              {hasImageResult && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  marginBottom: 10,
+                  background: 'rgba(66,133,244,0.08)',
+                  border: '1px solid rgba(66,133,244,0.3)',
+                  borderRadius: 7, padding: '5px 10px',
+                }}>
+                  <span style={{ fontSize: 11 }}>📷</span>
+                  <span style={{
+                    fontFamily: 'ui-monospace, monospace', fontSize: 8,
+                    color: '#4285F4', letterSpacing: '0.08em',
+                  }}>VISUAL ANALYSIS INCLUDED — Gemini analyzed your photo</span>
+                </div>
+              )}
 
               {/* Status badges */}
               <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
@@ -440,7 +555,7 @@ export default function IssueReporter({ element, propertyData, visible, onClose 
 
               {/* New issue button */}
               <button
-                onClick={() => { setStep('input'); setIssueText(''); setDiagnosis(null); setToolsUsed([]); setAgentSource('') }}
+                onClick={() => { setStep('input'); setIssueText(''); setDiagnosis(null); setToolsUsed([]); setAgentSource(''); setImagePreview(null); setImageBase64(null); setImageMimeType(null); setHasImageResult(false) }}
                 style={{
                   marginTop: 4, width: '100%',
                   background: 'transparent',

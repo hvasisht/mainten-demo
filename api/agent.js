@@ -192,7 +192,7 @@ function executeTool(name, args) {
 //  Pattern: Reason → Act (function call) → Observe (result) → repeat
 //  Max 6 iterations to prevent runaway loops
 // ──────────────────────────────────────────────────────────────
-async function runDiagnosisAgent(issue, element, propertyData) {
+async function runDiagnosisAgent(issue, element, propertyData, imageBase64, imageMimeType) {
   const a = propertyData?.assessor || {}
   const yearBuilt = parseInt(a.yearBuilt) || null
   const p = propertyData?.permits || {}
@@ -200,8 +200,10 @@ async function runDiagnosisAgent(issue, element, propertyData) {
     .map(r => `${r.issuedDate?.slice(0, 4) || '?'}: ${r.type} — ${r.description || 'N/A'}`)
     .join('\n') || 'None on record'
 
-  const systemInstruction = `You are Mainten Agent, an AI property intelligence agent specializing in Boston residential properties. You help renters understand maintenance issues, determine responsibility under Massachusetts law, and get professional help.
+  const hasImage = !!(imageBase64 && imageMimeType)
 
+  const systemInstruction = `You are Mainten Agent, an AI property intelligence agent specializing in Boston residential properties. You help renters understand maintenance issues, determine responsibility under Massachusetts law, and get professional help.
+${hasImage ? '\nA photo of the issue has been provided. Analyze it carefully — describe what you can visually observe (damage, wear, water stains, mold, rust, etc.) and factor this into your diagnosis.\n' : ''}
 You MUST use your tools to gather evidence before forming your diagnosis:
 1. Call assess_construction_risk to understand hazards given the building's age
 2. Call lookup_housing_regulation to determine legal responsibility
@@ -209,7 +211,7 @@ You MUST use your tools to gather evidence before forming your diagnosis:
 
 After using your tools, output your final diagnosis as a single JSON object with EXACTLY these fields:
 {
-  "diagnosis": "2-3 sentences specific to this property type, age, and the reported issue. Reference construction era findings.",
+  "diagnosis": "2-3 sentences specific to this property type, age, and the reported issue. Reference construction era findings.${hasImage ? ' Include what is visually visible in the photo.' : ''}",
   "responsibility": "LANDLORD" or "TENANT" or "SHARED",
   "responsibilityReason": "One sentence citing the specific MA law or code section retrieved",
   "urgency": "URGENT" or "SOON" or "MONITOR",
@@ -221,7 +223,7 @@ After using your tools, output your final diagnosis as a single JSON object with
 
 Output ONLY the JSON — no markdown fences, no preamble, no explanation.`
 
-  const userMessage = `Property: ${propertyData?.address || 'Unknown'}
+  const textMessage = `Property: ${propertyData?.address || 'Unknown'}
 Year built: ${yearBuilt || 'unknown'} (${a.luDesc || 'Residential'}, ${propertyData?.units?.count || '?'} units)
 Heat system: ${a.heatType || 'Unknown'} / ${a.heatSystem || 'Unknown'}
 Recent permits:
@@ -229,7 +231,7 @@ ${recentPermits}
 
 Reported element: ${element.name}
 Issue described: "${issue}"
-
+${hasImage ? '\nA photo of the issue is attached. Please analyze it along with the description above.' : ''}
 Research this issue using your tools, then output your diagnosis JSON.`
 
   const model = genAI.getGenerativeModel({
@@ -241,7 +243,12 @@ Research this issue using your tools, then output your diagnosis JSON.`
   const chat = model.startChat()
   const toolsUsed = []
 
-  let result = await chat.sendMessage(userMessage)
+  // If image provided, send as multimodal message (text + image parts)
+  const firstMessage = hasImage
+    ? [{ inlineData: { data: imageBase64, mimeType: imageMimeType } }, { text: textMessage }]
+    : textMessage
+
+  let result = await chat.sendMessage(firstMessage)
 
   // ReAct agent loop — keep going while Gemini wants to call functions
   for (let iteration = 0; iteration < 6; iteration++) {
@@ -285,7 +292,7 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
-  const { issue, propertyData, element } = req.body
+  const { issue, propertyData, element, imageBase64, imageMimeType } = req.body
   if (!issue || !element) return res.status(400).json({ error: 'issue and element required' })
 
   // Demo mode — no API key
@@ -301,8 +308,8 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { diagnosis, toolsUsed } = await runDiagnosisAgent(issue, element, propertyData)
-    res.json({ diagnosis, toolsUsed, source: 'mainten-agent' })
+    const { diagnosis, toolsUsed } = await runDiagnosisAgent(issue, element, propertyData, imageBase64, imageMimeType)
+    res.json({ diagnosis, toolsUsed, source: 'mainten-agent', hasImage: !!(imageBase64) })
   } catch (err) {
     console.error('[agent] Mainten Agent failed:', err.message)
     // Graceful fallback to single-shot Gemini diagnosis
