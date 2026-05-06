@@ -219,7 +219,7 @@ function buildChatSystem(propertyData, element, userProfile) {
     ? `\n- User: ${userProfile.role || 'tenant'}${userProfile.floor ? `, Floor/Unit: ${userProfile.floor}` : ''}${userProfile.moveIn ? `, Moved in: ${userProfile.moveIn}` : ''}`
     : ''
 
-  return `You are Mainten AI — an expert property advisor for Boston renters, powered by Google Gemini. You have deep knowledge of pre-war Boston construction, Massachusetts housing law, tenant rights, and building systems.
+  return `You are Mainten AI — an expert property advisor for Boston residents, powered by Google Gemini. You have deep knowledge of pre-war Boston construction, Massachusetts housing law, tenant rights, and building systems.
 
 PROPERTY:
 - Address: ${propertyData?.address || 'Unknown'}, built ${a.yearBuilt || 'unknown'}

@@ -1,12 +1,18 @@
 require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
+const multer = require('multer')
+const fs = require('fs')
+const path = require('path')
 const { GoogleGenerativeAI } = require('@google/generative-ai')
+const { GoogleAIFileManager } = require('@google/generative-ai/server')
 const { getPropertyData } = require('./src/bostonData')
 
 const app = express()
 app.use(cors())
-app.use(express.json())
+app.use(express.json({ limit: '50mb' }))
+
+const upload = multer({ dest: require('os').tmpdir() })
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY || ''
 const HAS_API_KEY = GEMINI_KEY.length > 10 && !GEMINI_KEY.startsWith('your_')
@@ -73,6 +79,40 @@ const DEMO_INSIGHTS = [
     icon: '🏠',
   },
 ]
+
+// ──────────────────────────────────────────────────────────────
+//  DEMO SUGGESTIONS — seasonal spring fallback
+// ──────────────────────────────────────────────────────────────
+const DEMO_SUGGESTIONS = [
+  { icon: '🌧', title: 'Clear roof drains before spring rains', detail: 'Boston averages 4 inches of rain in April. Clear flat roof drains to prevent ponding and top-floor ceiling leaks — landlord responsibility under 105 CMR 410.', urgency: 'HIGH', category: 'Roof' },
+  { icon: '🐀', title: 'Seal foundation gaps before pest season', detail: 'Rodent activity surges in spring. Gaps larger than ¼ inch around pipes and vents are entry points — report to landlord in writing, required under 105 CMR 410.550.', urgency: 'HIGH', category: 'Pests' },
+  { icon: '🔋', title: 'Test smoke and CO detectors now', detail: 'MA requires smoke detectors on every level and CO detectors within 10ft of sleeping areas. Test all units and replace batteries. Notify landlord if any are missing.', urgency: 'HIGH', category: 'Safety' },
+  { icon: '🌡', title: 'Request boiler service record', detail: 'Annual boiler maintenance (blowdown, trap inspection, pressure relief test) should happen at end of heating season. Ask your landlord when it was last serviced.', urgency: 'MEDIUM', category: 'Heating' },
+  { icon: '🪟', title: 'Check window seals as humidity rises', detail: 'Original wood frames in pre-war buildings expand in spring. Inspect glazing compound and caulk for gaps — these allow water and pest entry.', urgency: 'MEDIUM', category: 'Windows' },
+  { icon: '💧', title: 'Check ceilings for ice dam water stains', detail: 'Winter ice dams leave moisture stains visible in spring. Document any new ceiling stains with timestamped photos — landlord must address structural water damage.', urgency: 'MEDIUM', category: 'Water' },
+]
+
+function buildSuggestionsPrompt(propertyData, userProfile) {
+  const a = propertyData?.assessor || {}
+  const month = new Date().getMonth() + 1
+  const season = month >= 3 && month <= 5 ? 'Spring' : month >= 6 && month <= 8 ? 'Summer' : month >= 9 && month <= 11 ? 'Fall' : 'Winter'
+  return `You are Mainten AI. Generate 6 property maintenance suggestions for a Boston renter in ${season} ${new Date().getFullYear()}.
+
+PROPERTY:
+Address: ${propertyData?.address || 'Boston, MA'}
+Year Built: ${a.yearBuilt || 'unknown'}
+Type: ${a.luDesc || 'Residential'} · ${propertyData?.units?.count || 3} units
+Heat: ${a.heatType || 'Unknown'} / ${a.heatSystem || 'Unknown'}
+Roof: ${a.roofStructure || 'Unknown'} / ${a.roofCover || 'Unknown'}
+${userProfile ? `Tenant: ${userProfile.role || 'Renter'}, Floor: ${userProfile.floor || 'Unknown'}` : ''}
+
+Generate exactly 6 seasonally-relevant suggestions for a pre-war Boston building. Cover safety, weatherization, pest prevention, systems checks, and landlord vs tenant responsibilities. Reference MA Sanitary Code (105 CMR 410) where relevant.
+
+Respond with ONLY a JSON array, no markdown:
+[{"icon":"🌧","title":"Action title max 8 words","detail":"2-3 sentences. Specific and actionable. Reference landlord vs tenant responsibility.","urgency":"HIGH","category":"Roof"}]
+
+Urgency: HIGH | MEDIUM | LOW`
+}
 
 // ──────────────────────────────────────────────────────────────
 //  PROPERTY INTELLIGENCE PROMPT
@@ -193,10 +233,17 @@ function contactsBlock() {
 // ──────────────────────────────────────────────────────────────
 //  ELEMENT CHAT PROMPT
 // ──────────────────────────────────────────────────────────────
-function buildChatSystemPrompt(propertyData, element) {
+function buildChatSystemPrompt(propertyData, element, documents) {
   const a = propertyData?.assessor || {}
   const yearBuilt = a.yearBuilt || 'unknown'
-  return `You are Mainten AI — an expert property advisor for Boston renters. You can answer ANY question about this property, home maintenance, tenant rights, or finding help.
+
+  let docSection = ''
+  if (documents && documents.length > 0) {
+    docSection = '\n\nTENANT\'S UPLOADED DOCUMENTS (reference these when answering questions about their specific lease terms, utility costs, inspection findings, etc.):\n' +
+      documents.map(d => `--- ${d.category}: ${d.name} ---\n${d.content}`).join('\n\n')
+  }
+
+  return `You are Mainten AI — an expert property advisor for Boston residents. You can answer ANY question about this property, home maintenance, tenant rights, or finding help.
 
 PROPERTY CONTEXT:
 - Address: ${propertyData?.address || 'Unknown'}
@@ -206,13 +253,14 @@ PROPERTY CONTEXT:
 - Structure: ${a.structureClass || 'Unknown'}
 - Units: ${propertyData?.units?.count || 'Unknown'}
 - Currently discussing: ${element.name}
-- Element context: ${element.context}
+- Element context: ${element.context}${docSection}
 
 BOSTON SERVICE PROVIDERS (use these when the user asks for contacts, who to call, or how to fix something):
 ${contactsBlock()}
 
 RULES:
 - Answer the user's ACTUAL QUESTION directly — do not default to generic element info
+- If documents are uploaded, reference them specifically when the question relates to lease terms, bills, or inspection findings
 - If they ask for a contact, contractor, or "who to call" → provide the relevant providers above with name and phone number
 - If they ask about pest issues (rats, mice, cockroaches, bugs) → recommend pest control contacts
 - If they ask about a repair → advise whether it's landlord vs tenant responsibility, then give contacts
@@ -290,11 +338,31 @@ app.post('/api/insights', async (req, res) => {
   }
 })
 
+// POST /api/suggestions
+// Body: { propertyData, userProfile }
+// Returns: { suggestions: [...] }
+app.post('/api/suggestions', async (req, res) => {
+  const { propertyData, userProfile } = req.body
+
+  if (!HAS_API_KEY) {
+    return res.json({ suggestions: DEMO_SUGGESTIONS, source: 'demo' })
+  }
+
+  try {
+    const text = await geminiGenerate(buildSuggestionsPrompt(propertyData, userProfile))
+    const suggestions = JSON.parse(stripJson(text))
+    res.json({ suggestions, source: 'gemini' })
+  } catch (err) {
+    console.error('[suggestions]', err.message)
+    res.json({ suggestions: DEMO_SUGGESTIONS, source: 'fallback' })
+  }
+})
+
 // POST /api/chat
-// Body: { messages: [{role, content}], propertyData, element: {name, context} }
+// Body: { messages: [{role, content}], propertyData, element: {name, context}, documents }
 // Returns: { reply }
 app.post('/api/chat', async (req, res) => {
-  const { messages, propertyData, element } = req.body
+  const { messages, propertyData, element, documents } = req.body
   if (!messages || !element) return res.status(400).json({ error: 'messages and element required' })
 
   if (!HAS_API_KEY) {
@@ -357,7 +425,7 @@ app.post('/api/chat', async (req, res) => {
   }
 
   try {
-    const reply = await geminiChat(buildChatSystemPrompt(propertyData, element), messages)
+    const reply = await geminiChat(buildChatSystemPrompt(propertyData, element, documents), messages)
     res.json({ reply, source: 'gemini' })
   } catch (err) {
     console.error('[chat] Gemini error:', err.message)
@@ -447,6 +515,107 @@ app.post('/api/diagnose', async (req, res) => {
   } catch (err) {
     console.error('[diagnose] Gemini error:', err.message)
     res.status(500).json({ error: 'AI unavailable' })
+  }
+})
+
+// ──────────────────────────────────────────────────────────────
+//  DEMO FLOOR PLAN GENERATOR
+// ──────────────────────────────────────────────────────────────
+function generateDemoFloorPlan(roomDetails) {
+  const beds = parseInt(roomDetails.bedrooms) || 2
+  const baths = parseInt(roomDetails.bathrooms) || 1
+  const kitchens = parseInt(roomDetails.kitchen) || 1
+  const living = parseInt(roomDetails.living) || 1
+  const others = roomDetails.others || []
+
+  const rooms = []
+  let id = 0
+
+  // Layout: living + kitchen top row, bedrooms + baths bottom row, hallway connecting
+  const totalW = 12, totalH = 10
+
+  // Hallway strip
+  rooms.push({ id: `r${id++}`, name: 'Hallway', type: 'hallway', x: 0, y: 4, w: totalW, h: 1, doors: [] })
+
+  // Living room(s) - top left
+  let lx = 0
+  for (let i = 0; i < living; i++) {
+    rooms.push({ id: `r${id++}`, name: living > 1 ? `Living ${i+1}` : 'Living Room', type: 'living', x: lx, y: 0, w: 5, h: 4, doors: [{ wall: 'south', pos: 0.5 }] })
+    lx += 5
+  }
+
+  // Kitchen(s)
+  let kx = lx
+  for (let i = 0; i < kitchens; i++) {
+    rooms.push({ id: `r${id++}`, name: kitchens > 1 ? `Kitchen ${i+1}` : 'Kitchen', type: 'kitchen', x: kx, y: 0, w: 4, h: 4, doors: [{ wall: 'south', pos: 0.5 }] })
+    kx += 4
+  }
+
+  // Others top right
+  let ox = kx
+  for (const name of others.slice(0, 1)) {
+    const w = Math.min(3, totalW - ox)
+    if (w > 0) rooms.push({ id: `r${id++}`, name, type: 'other', x: ox, y: 0, w, h: 4, doors: [{ wall: 'south', pos: 0.5 }] })
+    ox += w
+  }
+
+  // Bedrooms bottom
+  const bedroomW = Math.floor((totalW - baths * 2) / Math.max(beds, 1))
+  let bx = 0
+  for (let i = 0; i < beds; i++) {
+    const w = i === beds - 1 ? totalW - baths * 2 - bx : bedroomW
+    rooms.push({ id: `r${id++}`, name: beds > 1 ? `Bedroom ${i+1}` : 'Bedroom', type: 'bedroom', x: bx, y: 5, w: Math.max(w, 3), h: 5, doors: [{ wall: 'north', pos: 0.5 }] })
+    bx += Math.max(w, 3)
+  }
+
+  // Bathrooms bottom right
+  for (let i = 0; i < baths; i++) {
+    rooms.push({ id: `r${id++}`, name: baths > 1 ? `Bath ${i+1}` : 'Bathroom', type: 'bathroom', x: totalW - (baths - i) * 2, y: 5, w: 2, h: 5, doors: [{ wall: 'north', pos: 0.5 }] })
+  }
+
+  return { rooms, totalW, totalH }
+}
+
+// ──────────────────────────────────────────────────────────────
+//  FLOOR PLAN — VIDEO ANALYSIS
+// ──────────────────────────────────────────────────────────────
+app.post('/api/floorplan', async (req, res) => {
+  const { frames, roomDetails } = req.body
+  if (!frames?.length) return res.status(400).json({ error: 'frames required' })
+
+  if (!HAS_API_KEY) {
+    return res.json({ floorPlan: generateDemoFloorPlan(roomDetails), source: 'demo' })
+  }
+
+  const prompt = `You are analyzing 3 frames from a home interior video. Generate a 2D floor plan of ONLY the rooms clearly visible.
+
+STRICT RULES:
+- Map ONLY rooms you can actually see. If 1 room is visible, return 1 room only.
+- Observe doors: which wall, position along wall (0=left, 1=right), hinge side.
+- Observe windows: which wall, position, width as fraction of wall.
+- Room proportions must reflect actual shape — long narrow room has w >> h.
+- User context hints: ${roomDetails.bedrooms || 0} bedroom(s), ${roomDetails.bathrooms || 0} bathroom(s), ${roomDetails.kitchen || 0} kitchen(s), ${roomDetails.living || 0} living room(s)
+
+Return ONLY valid JSON, no markdown:
+{"rooms":[{"id":"r1","name":"Bedroom","type":"bedroom","x":0,"y":0,"w":6,"h":5,"doors":[{"wall":"south","pos":0.3,"hinge":"left"}],"windows":[{"wall":"north","pos":0.5,"size":0.3}]}],"totalW":6,"totalH":5}
+
+wall: "north"|"south"|"east"|"west" — pos: 0.0–1.0 along wall — hinge: "left"|"right" from inside — size: window width fraction
+type: bedroom|bathroom|kitchen|living|dining|hallway|other`
+
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+    const parts = [
+      { text: prompt },
+      ...frames.map(f => ({ inlineData: { mimeType: 'image/png', data: f } })),
+    ]
+    const result = await model.generateContent({ contents: [{ role: 'user', parts }] })
+    const text = result.response.text().trim()
+    console.log('[floorplan] Gemini response:', text.slice(0, 300))
+    const floorPlan = JSON.parse(stripJson(text))
+    res.json({ floorPlan, source: 'gemini' })
+  } catch (err) {
+    console.error('[floorplan] error:', err.message)
+    res.json({ floorPlan: generateDemoFloorPlan(roomDetails), source: 'fallback' })
   }
 })
 

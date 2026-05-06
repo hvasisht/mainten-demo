@@ -28,7 +28,6 @@ export default function Home() {
   // Profile state
   const [userProfile, setUserProfile]     = useState(null)
   const [activeElement, setActiveElement] = useState(null)
-  const [chatVisible, setChatVisible]     = useState(false)
   const [issueElement, setIssueElement]   = useState(null)
   const [issueVisible, setIssueVisible]   = useState(false)
 
@@ -73,7 +72,6 @@ export default function Home() {
   const handleOnboardingComplete = useCallback((profile) => {
     setUserProfile(profile)
     setAppState('profile')
-    setChatVisible(false)
     setActiveElement(null)
   }, [])
 
@@ -81,7 +79,6 @@ export default function Home() {
   const handleElementClick = useCallback((el) => {
     setActiveElement(el)
     setIssueVisible(false)
-    setChatVisible(true)
   }, [])
 
   // ── Report issue ──
@@ -98,7 +95,6 @@ export default function Home() {
     setUserProfile(null)
     setFlyTo(null)
     setActiveElement(null)
-    setChatVisible(false)
     setIssueVisible(false)
   }, [])
 
@@ -139,45 +135,47 @@ export default function Home() {
         transition: 'opacity 0.5s ease',
       }}>
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 20,
+          display: 'flex', flexDirection: 'column', gap: 10,
           pointerEvents: inProfile ? 'none' : 'all',
           width: '100%', maxWidth: 680,
         }}>
-          {/* MAINTEN wordmark */}
-          <div
-            onClick={inInsights ? handleReset : undefined}
-            style={{
-              flexShrink: 0,
-              fontFamily: 'ui-monospace, Consolas, monospace',
-              fontSize: 'clamp(14px, 1.6vw, 20px)',
-              fontWeight: 700,
-              letterSpacing: '0.28em',
-              color: colors.amber,
-              textTransform: 'uppercase',
-              textShadow: `0 0 30px ${colors.amber}44`,
-              cursor: inInsights ? 'pointer' : 'default',
-            }}>
-            MAINTEN
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+            {/* MAINTEN wordmark */}
+            <div
+              onClick={inInsights ? handleReset : undefined}
+              style={{
+                flexShrink: 0,
+                fontFamily: 'ui-monospace, Consolas, monospace',
+                fontSize: 'clamp(14px, 1.6vw, 20px)',
+                fontWeight: 700,
+                letterSpacing: '0.28em',
+                color: colors.amber,
+                textTransform: 'uppercase',
+                textShadow: `0 0 30px ${colors.amber}44`,
+                cursor: inInsights ? 'pointer' : 'default',
+              }}>
+              MAINTEN
+            </div>
+            <div style={{ flex: 1 }}>
+              <SearchBar
+                onFlyTo={setFlyTo}
+                onAddressSelect={handleAddressSelect}
+              />
+            </div>
           </div>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <SearchBar
-              onFlyTo={setFlyTo}
-              onAddressSelect={handleAddressSelect}
-            />
-            {!selectedAddress && (
-              <div style={{ textAlign: 'center', pointerEvents: 'none' }}>
-                <span style={{
-                  fontFamily: 'Georgia, serif',
-                  fontSize: 13,
-                  color: 'rgba(200,180,120,0.55)',
-                  letterSpacing: '0.02em',
-                  fontStyle: 'italic',
-                }}>
-                  AI-powered property intelligence for renters.
-                </span>
-              </div>
-            )}
-          </div>
+          {!selectedAddress && (
+            <div style={{ textAlign: 'center', pointerEvents: 'none' }}>
+              <span style={{
+                fontFamily: 'Georgia, serif',
+                fontSize: 13,
+                color: 'rgba(200,180,120,0.55)',
+                letterSpacing: '0.02em',
+                fontStyle: 'italic',
+              }}>
+                AI-powered property intelligence for residents.
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Address pill */}
@@ -253,32 +251,53 @@ export default function Home() {
         </div>
       )}
 
-      {/* ─── PROFILE: TRIPLE-DECKER FLOOR PLAN ─── */}
-      <TripleDeckerMap
-        address={selectedAddress}
-        propertyData={propertyData}
-        activeElement={activeElement}
-        onElementClick={handleElementClick}
-        visible={inProfile}
-        userProfile={userProfile}
-      />
+      {/* ─── PROFILE: CENTERED TWO-COLUMN LAYOUT ─── */}
+      {inProfile && (
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 20,
+          padding: '72px 24px 16px',
+          animation: 'fadeIn 0.5s ease forwards',
+          zIndex: 10,
+          boxSizing: 'border-box',
+        }}>
+          {/* Left: map + chat */}
+          <div style={{
+            display: 'flex', flexDirection: 'column', gap: 12,
+            width: 680, maxHeight: '90vh', flexShrink: 0,
+            overflow: 'hidden',
+          }}>
+            {/* Map takes remaining space; clips if taller than available */}
+            <div style={{ flex: '1 1 auto', minHeight: 0, overflow: 'hidden' }}>
+              <TripleDeckerMap
+                address={selectedAddress}
+                propertyData={propertyData}
+                activeElement={activeElement}
+                onElementClick={handleElementClick}
+                userProfile={userProfile}
+              />
+            </div>
+            <ChatPanel
+              element={activeElement}
+              propertyData={propertyData}
+              userProfile={userProfile}
+              onClose={() => setActiveElement(null)}
+              onReportIssue={handleReportIssue}
+            />
+          </div>
 
-      {/* ─── PROFILE: PROPERTY DASHBOARD (score + permits + can i? + share) ─── */}
-      <PropertyDashboard
-        address={selectedAddress}
-        propertyData={propertyData}
-        visible={inProfile && !chatVisible}
-      />
-
-      {/* ─── PROFILE: CHAT PANEL ─── */}
-      <ChatPanel
-        element={activeElement}
-        propertyData={propertyData}
-        userProfile={userProfile}
-        visible={inProfile && chatVisible}
-        onClose={() => setChatVisible(false)}
-        onReportIssue={handleReportIssue}
-      />
+          {/* Right: dashboard */}
+          <PropertyDashboard
+            address={selectedAddress}
+            propertyData={propertyData}
+            visible={inProfile}
+          />
+        </div>
+      )}
 
       {/* ─── ISSUE REPORTER ─── */}
       <IssueReporter

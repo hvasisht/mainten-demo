@@ -107,14 +107,7 @@ export default function PropertyDashboard({ address, propertyData, visible }) {
 
   return (
     <div style={{
-      position: 'absolute',
-      right: 40, top: '50%',
-      transform: visible ? 'translateY(-50%)' : 'translateY(calc(-50% + 20px))',
-      opacity: visible ? 1 : 0,
-      transition: 'opacity 0.4s ease, transform 0.4s ease',
-      pointerEvents: visible ? 'all' : 'none',
-      zIndex: 10,
-      width: 300,
+      width: 380,
       maxHeight: '82vh',
       borderRadius: 16,
       overflow: 'hidden',
@@ -124,9 +117,30 @@ export default function PropertyDashboard({ address, propertyData, visible }) {
       border: `1.5px solid ${colors.gunmetal}`,
       boxShadow: `0 10px 50px rgba(0,0,0,0.8), 0 0 0 1px ${colors.amber}22`,
       display: 'flex', flexDirection: 'column',
+      flexShrink: 0,
     }}>
       {/* Amber bar */}
       <div style={{ height: 3, background: `linear-gradient(to right, ${colors.amber}, ${colors.amberBright})`, flexShrink: 0 }} />
+
+      {/* Header */}
+      <div style={{
+        padding: '12px 16px 10px',
+        borderBottom: `1px solid ${colors.gunmetal}44`,
+        flexShrink: 0,
+      }}>
+        <div style={{
+          fontFamily: 'ui-monospace, monospace', fontSize: 9,
+          letterSpacing: '0.14em', color: colors.amber,
+          textTransform: 'uppercase',
+        }}>Property Insights</div>
+        <div style={{
+          fontFamily: 'Georgia, serif', fontSize: 11,
+          color: 'rgba(245,240,232,0.45)', marginTop: 2,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
+          {address?.split(',')[0]}
+        </div>
+      </div>
 
       {/* Scrollable body */}
       <div style={{ overflowY: 'auto', flex: 1 }}>

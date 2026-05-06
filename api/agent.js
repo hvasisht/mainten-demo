@@ -202,7 +202,7 @@ async function runDiagnosisAgent(issue, element, propertyData, imageBase64, imag
 
   const hasImage = !!(imageBase64 && imageMimeType)
 
-  const systemInstruction = `You are Mainten Agent, an AI property intelligence agent specializing in Boston residential properties. You help renters understand maintenance issues, determine responsibility under Massachusetts law, and get professional help.
+  const systemInstruction = `You are Mainten Agent, an AI property intelligence agent specializing in Boston residential properties. You help residents understand maintenance issues, determine responsibility under Massachusetts law, and get professional help.
 ${hasImage ? '\nA photo of the issue has been provided. Analyze it carefully — describe what you can visually observe (damage, wear, water stains, mold, rust, etc.) and factor this into your diagnosis.\n' : ''}
 You MUST use your tools to gather evidence before forming your diagnosis:
 1. Call assess_construction_risk to understand hazards given the building's age

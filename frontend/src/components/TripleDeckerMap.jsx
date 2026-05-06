@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { colors } from '../tokens'
+import FloorPlanSVG from './FloorPlanSVG'
 
 // ──────────────────────────────────────────────────────────────
 //  ELEMENTS — each represents a system/area to chat about
@@ -102,14 +103,31 @@ function parseUserFloor(floorStr) {
   return n
 }
 
-export default function TripleDeckerMap({ address, propertyData, activeElement, onElementClick, visible, userProfile }) {
+// Room type → element id mapping for custom floor plans
+const ROOM_TYPE_TO_ELEMENT = {
+  bedroom: 'bedroom', bathroom: 'bathroom',
+  kitchen: 'kitchen', living: 'living', dining: 'living',
+}
+
+// Element id → room types that should light up
+const ELEMENT_TO_ROOM_TYPES = {
+  bedroom: ['bedroom'], bathroom: ['bathroom'],
+  kitchen: ['kitchen'], living: ['living', 'dining'],
+}
+
+export default function TripleDeckerMap({ address, propertyData, activeElement, onElementClick, userProfile }) {
   const [hoveredRoom, setHoveredRoom] = useState(null)
+  const svgContainerRef = useRef(null)
+  const tripleDeckerRef = useRef(null)
 
   const yearBuilt = propertyData?.assessor?.yearBuilt || '1914'
   const units = propertyData?.units?.count || 3
 
   // If tenant specified their floor, highlight only that floor
   const userFloor = parseUserFloor(userProfile?.floor)
+
+  // Custom floor plan from onboarding mapper
+  const customFloorPlan = userProfile?.floorPlan
 
   function getElement(id) {
     return ELEMENTS.find(e => e.id === id)
@@ -161,18 +179,93 @@ export default function TripleDeckerMap({ address, propertyData, activeElement, 
     return isUserFloor(room) ? 1 : 0.25
   }
 
+  // ── Custom floor plan view ──────────────────────────────────────────────────
+  if (customFloorPlan) {
+    const activeRoomTypes = ELEMENT_TO_ROOM_TYPES[activeElement?.id] || []
+
+    // Use coordinate-math click handling on a div wrapper — bypasses SVG pointer-event quirks
+    function handleSVGContainerClick(e) {
+      const container = svgContainerRef.current
+      if (!container) return
+      const rect = container.getBoundingClientRect()
+      const CELL = 52, PAD = 24
+      const svgW = (customFloorPlan.totalW || 14) * CELL + PAD * 2
+      const svgH = (customFloorPlan.totalH || 11) * CELL + PAD * 2
+      const scaleX = svgW / rect.width
+      const scaleY = svgH / rect.height
+      const svgX = (e.clientX - rect.left) * scaleX
+      const svgY = (e.clientY - rect.top) * scaleY
+      const clicked = customFloorPlan.rooms.find(room => {
+        const rx = PAD + room.x * CELL
+        const ry = PAD + room.y * CELL
+        return svgX >= rx && svgX <= rx + room.w * CELL && svgY >= ry && svgY <= ry + room.h * CELL
+      })
+      if (!clicked) return
+      const elemId = ROOM_TYPE_TO_ELEMENT[clicked.type]
+      if (!elemId) return
+      const el = ELEMENTS.find(x => x.id === elemId)
+      if (el) onElementClick(el, e.clientY)
+    }
+
+    return (
+      <div>
+        {/* Header */}
+        <div style={{
+          background: 'rgba(14,13,11,0.90)', backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          border: `1.5px solid ${colors.gunmetal}`, borderBottom: 'none',
+          borderRadius: '12px 12px 0 0', padding: '10px 14px 8px',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontFamily: 'ui-monospace, Consolas, monospace', fontSize: 9, letterSpacing: '0.14em', color: colors.amber, textTransform: 'uppercase' }}>
+              House Map
+            </div>
+          </div>
+          <div style={{ fontFamily: 'Georgia, serif', fontSize: 11, color: 'rgba(245,240,232,0.5)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {address?.split(',')[0]}
+          </div>
+        </div>
+
+        {/* Floor plan SVG — click handled via coordinate math on the wrapper div */}
+        <div
+          ref={svgContainerRef}
+          onClick={handleSVGContainerClick}
+          style={{
+            background: 'rgba(12,11,10,0.95)', backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            border: `1.5px solid ${colors.gunmetal}`,
+            borderTop: `1px solid ${colors.gunmetal}22`, borderBottom: 'none',
+            cursor: 'pointer',
+          }}
+        >
+          <FloorPlanSVG
+            floorPlan={customFloorPlan}
+            activeRoomTypes={activeRoomTypes}
+          />
+        </div>
+
+        {/* Footer — issue counts */}
+        <div style={{
+          background: 'rgba(14,13,11,0.90)', backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          border: `1.5px solid ${colors.gunmetal}`,
+          borderTop: `1px solid ${colors.gunmetal}22`,
+          borderRadius: '0 0 12px 12px',
+          padding: '8px 14px 10px',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 8, color: `${colors.gunmetal}66`, letterSpacing: '0.08em' }}>
+            TAP ANY ROOM TO CHAT
+          </span>
+          <IssueBadge count={0} />
+        </div>
+      </div>
+    )
+  }
+
+  // ── Triple-decker fallback view ─────────────────────────────────────────────
   return (
-    <div style={{
-      position: 'absolute',
-      left: 40,
-      top: '50%',
-      transform: visible ? 'translateY(-50%)' : 'translateY(calc(-50% + 20px))',
-      opacity: visible ? 1 : 0,
-      transition: 'opacity 0.5s ease, transform 0.5s ease',
-      pointerEvents: visible ? 'all' : 'none',
-      zIndex: 10,
-      width: 280,
-    }}>
+    <div style={{ width: 400, margin: '0 auto' }}>
 
       {/* ── Header ── */}
       <div style={{
@@ -198,15 +291,43 @@ export default function TripleDeckerMap({ address, propertyData, activeElement, 
       </div>
 
       {/* ── SVG Floor Plan ── */}
-      <div style={{
-        background: 'rgba(12,11,10,0.95)',
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        border: `1.5px solid ${colors.gunmetal}`,
-        borderTop: `1px solid ${colors.gunmetal}22`,
-        borderBottom: 'none',
-      }}>
-        <svg width="280" height="440" viewBox="0 0 260 440" style={{ display: 'block' }}>
+      <div
+        ref={tripleDeckerRef}
+        onClick={(e) => {
+          const container = tripleDeckerRef.current
+          if (!container) return
+          const rect = container.getBoundingClientRect()
+          const scaleX = 260 / rect.width
+          const scaleY = 440 / rect.height
+          const sx = (e.clientX - rect.left) * scaleX
+          const sy = (e.clientY - rect.top) * scaleY
+          const hit = ROOMS.find(r => sx >= r.x && sx <= r.x + r.w && sy >= r.y && sy <= r.y + r.h)
+          if (hit) { onElementClick(getElement(hit.elementId), e.clientY); return }
+          if (sx >= 20 && sx <= 240 && sy >= 20 && sy <= 80) onElementClick(getElement('roof'), e.clientY)
+        }}
+        onMouseMove={(e) => {
+          const container = tripleDeckerRef.current
+          if (!container) return
+          const rect = container.getBoundingClientRect()
+          const scaleX = 260 / rect.width
+          const scaleY = 440 / rect.height
+          const sx = (e.clientX - rect.left) * scaleX
+          const sy = (e.clientY - rect.top) * scaleY
+          const hit = ROOMS.find(r => sx >= r.x && sx <= r.x + r.w && sy >= r.y && sy <= r.y + r.h)
+          setHoveredRoom(hit?.id || (sx >= 20 && sx <= 240 && sy >= 20 && sy <= 80 ? 'roof' : null))
+        }}
+        onMouseLeave={() => setHoveredRoom(null)}
+        style={{
+          background: 'rgba(12,11,10,0.95)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          border: `1.5px solid ${colors.gunmetal}`,
+          borderTop: `1px solid ${colors.gunmetal}22`,
+          borderBottom: 'none',
+          cursor: 'pointer',
+        }}
+      >
+        <svg width="100%" viewBox="0 0 260 440" style={{ display: 'block', pointerEvents: 'none' }}>
 
           <rect width="260" height="440" fill="#0b0a09" />
 
@@ -219,10 +340,11 @@ export default function TripleDeckerMap({ address, propertyData, activeElement, 
             return (
               <g
                 key={room.id}
-                onClick={() => onElementClick(getElement(room.elementId))}
+                onClick={(e) => onElementClick(getElement(room.elementId), e.clientY)}
                 onMouseEnter={() => setHoveredRoom(room.id)}
                 onMouseLeave={() => setHoveredRoom(null)}
                 style={{ cursor: 'pointer', opacity: roomLabelOpacity(room) }}
+                pointerEvents="all"
               >
                 <rect
                   x={room.x} y={room.y} width={room.w} height={room.h}
@@ -230,6 +352,7 @@ export default function TripleDeckerMap({ address, propertyData, activeElement, 
                   stroke={roomStroke(room)}
                   strokeWidth={roomStrokeWidth(room)}
                   rx={2}
+                  pointerEvents="all"
                   style={{ transition: 'fill 0.15s, stroke 0.15s' }}
                 />
                 {/* Room icon + label */}
@@ -270,16 +393,18 @@ export default function TripleDeckerMap({ address, propertyData, activeElement, 
 
           {/* ── Roof (clickable) ── */}
           <g
-            onClick={() => onElementClick(getElement('roof'))}
+            onClick={(e) => onElementClick(getElement('roof'), e.clientY)}
             onMouseEnter={() => setHoveredRoom('roof')}
             onMouseLeave={() => setHoveredRoom(null)}
             style={{ cursor: 'pointer' }}
+            pointerEvents="all"
           >
             <polygon
               points="20,80 130,20 240,80"
               fill={activeElement?.id === 'roof' ? `${colors.amber}28` : hoveredRoom === 'roof' ? `${colors.amber}18` : `${colors.amber}0a`}
               stroke={activeElement?.id === 'roof' ? colors.amber : hoveredRoom === 'roof' ? `${colors.amber}88` : `${colors.amber}44`}
               strokeWidth={activeElement?.id === 'roof' ? 1.5 : 1}
+              pointerEvents="all"
               style={{ transition: 'fill 0.15s, stroke 0.15s' }}
             />
             <text x={130} y={56} textAnchor="middle" style={{
@@ -371,7 +496,7 @@ export default function TripleDeckerMap({ address, propertyData, activeElement, 
         </svg>
       </div>
 
-      {/* ── Legend ── */}
+      {/* ── Footer — issue counts ── */}
       <div style={{
         background: 'rgba(14,13,11,0.90)',
         backdropFilter: 'blur(16px)',
@@ -380,23 +505,40 @@ export default function TripleDeckerMap({ address, propertyData, activeElement, 
         borderTop: `1px solid ${colors.gunmetal}22`,
         borderRadius: '0 0 12px 12px',
         padding: '8px 14px 10px',
-        display: 'flex', flexWrap: 'wrap', gap: '4px 14px',
-        alignItems: 'center',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
       }}>
-        <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 8, color: `${colors.gunmetal}aa`, letterSpacing: '0.08em' }}>
-          CLICK ANY ROOM TO CHAT
+        <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 8, color: `${colors.gunmetal}66`, letterSpacing: '0.08em' }}>
+          TAP ANY AREA TO CHAT
         </span>
-        {[
-          { color: colors.riskOrange, label: 'Risk' },
-          { color: colors.amber,      label: 'Monitor' },
-          { color: '#5A8060',         label: 'Clear' },
-        ].map(l => (
-          <span key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: l.color, display: 'inline-block' }} />
-            <span style={{ fontFamily: 'ui-monospace, monospace', fontSize: 8, color: colors.gunmetal, letterSpacing: '0.06em' }}>{l.label}</span>
-          </span>
-        ))}
+        <IssueBadge count={0} />
       </div>
+    </div>
+  )
+}
+
+function IssueBadge({ count }) {
+  const hasIssues = count > 0
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 5,
+      background: hasIssues ? `${colors.riskOrange}18` : 'rgba(255,255,255,0.03)',
+      border: `1px solid ${hasIssues ? colors.riskOrange + '55' : colors.gunmetal + '44'}`,
+      borderRadius: 8, padding: '3px 9px',
+    }}>
+      <span style={{
+        fontFamily: 'ui-monospace, monospace', fontSize: 11, fontWeight: 700,
+        color: hasIssues ? colors.riskOrange : colors.gunmetal,
+        lineHeight: 1,
+      }}>
+        {count}
+      </span>
+      <span style={{
+        fontFamily: 'ui-monospace, monospace', fontSize: 7, letterSpacing: '0.1em',
+        color: hasIssues ? colors.riskOrange : colors.gunmetal,
+        textTransform: 'uppercase',
+      }}>
+        {count === 1 ? 'issue' : 'issues'}
+      </span>
     </div>
   )
 }
