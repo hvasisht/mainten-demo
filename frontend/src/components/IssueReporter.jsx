@@ -192,6 +192,23 @@ export default function IssueReporter({ element, propertyData, visible, onClose 
       })
       const data = await res.json()
       clearInterval(interval)
+      // Persist issue to localStorage so chat can reference it in future sessions
+      if (data.diagnosis && propertyData?.address) {
+        try {
+          const key = `mainten_issues_${(propertyData.address).replace(/[^a-z0-9]/gi, '_').toLowerCase()}`
+          const existing = JSON.parse(localStorage.getItem(key) || '[]')
+          existing.push({
+            id: Date.now(),
+            element: element?.name || 'Unknown',
+            issue: issueText.trim(),
+            responsibility: data.diagnosis.responsibility,
+            urgency: data.diagnosis.urgency,
+            diagnosis: data.diagnosis.diagnosis,
+            timestamp: new Date().toISOString(),
+          })
+          localStorage.setItem(key, JSON.stringify(existing.slice(-50)))
+        } catch {}
+      }
       setDiagnosis(data.diagnosis)
       setToolsUsed(data.toolsUsed || [])
       setAgentSource(data.source || '')

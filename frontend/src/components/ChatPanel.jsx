@@ -1,6 +1,31 @@
 import { useState, useEffect, useRef } from 'react'
 import { colors } from '../tokens'
 
+// ── localStorage helpers ──────────────────────────────────────
+function storageKey(address, elementId) {
+  return `mainten_chat_${(address || '').replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${elementId}`
+}
+function issuesKey(address) {
+  return `mainten_issues_${(address || '').replace(/[^a-z0-9]/gi, '_').toLowerCase()}`
+}
+function loadMessages(address, elementId) {
+  try {
+    const raw = localStorage.getItem(storageKey(address, elementId))
+    if (raw) return JSON.parse(raw)
+  } catch {}
+  return null
+}
+function saveMessages(address, elementId, msgs) {
+  try { localStorage.setItem(storageKey(address, elementId), JSON.stringify(msgs.slice(-60))) } catch {}
+}
+function loadIssueHistory(address) {
+  try {
+    const raw = localStorage.getItem(issuesKey(address))
+    if (raw) return JSON.parse(raw)
+  } catch {}
+  return []
+}
+
 const INITIAL_MESSAGES = {
   home:       "Ask me anything about this property — repairs, tenant rights, safety issues, permits, or what to watch out for.",
   boiler:     "Ask me anything about the heating system — how it works, repair rights, who to call, what sounds are normal.",
@@ -128,23 +153,36 @@ export default function ChatPanel({ element, propertyData, userProfile, onClose,
   const fileInputRef = useRef(null)
   const prevId     = useRef(null)
 
-  // Reset chat when element changes
+  // Load chat history from localStorage when element changes; start fresh if none
   useEffect(() => {
     const id = element?.id ?? 'home'
     if (prevId.current === id) return
     prevId.current = id
-    const base = INITIAL_MESSAGES[id] || `What do you want to know about the ${element?.name || 'property'}?`
-    const greeting = userProfile?.floor && element
-      ? `${base}\n\nI can see you're in unit/floor ${userProfile.floor}.`
-      : base
-    setMessages([{ role: 'assistant', content: greeting }])
+    const address = propertyData?.address
+    const saved = loadMessages(address, id)
+    if (saved && saved.length > 1) {
+      setMessages(saved)
+    } else {
+      const base = INITIAL_MESSAGES[id] || `What do you want to know about the ${element?.name || 'property'}?`
+      const greeting = userProfile?.floor && element
+        ? `${base}\n\nI can see you're in unit/floor ${userProfile.floor}.`
+        : base
+      setMessages([{ role: 'assistant', content: greeting }])
+    }
     setInput('')
     setTimeout(() => inputRef.current?.focus(), 300)
-  }, [element])
+  }, [element, propertyData])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
+
+  // Persist messages to localStorage whenever they update
+  useEffect(() => {
+    if (messages.length <= 1) return
+    const id = element?.id ?? 'home'
+    saveMessages(propertyData?.address, id, messages)
+  }, [messages])
 
   // Fetch suggestions on first visit to that tab
   useEffect(() => {
@@ -177,6 +215,7 @@ export default function ChatPanel({ element, propertyData, userProfile, onClose,
     setInput('')
     setLoading(true)
     try {
+      const issueHistory = loadIssueHistory(propertyData?.address)
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -191,6 +230,7 @@ export default function ChatPanel({ element, propertyData, userProfile, onClose,
           documents: documents.length > 0
             ? documents.map(d => ({ name: d.name, category: d.category, content: d.content }))
             : undefined,
+          issueHistory: issueHistory.length > 0 ? issueHistory : undefined,
         }),
       })
       const data = await res.json()
@@ -205,17 +245,45 @@ export default function ChatPanel({ element, propertyData, userProfile, onClose,
   function handleFileUpload(e) {
     const file = e.target.files[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      setDocuments(prev => [...prev, {
-        id: Date.now(),
-        name: file.name,
-        category: uploadCategory,
-        content: (ev.target.result || '').slice(0, 8000),
-      }])
-    }
-    reader.readAsText(file)
     e.target.value = ''
+
+    const reader = new FileReader()
+
+    if (file.type === 'application/pdf') {
+      // PDFs must be extracted server-side — readAsText returns binary garbage
+      reader.onload = async (ev) => {
+        const bytes = new Uint8Array(ev.target.result)
+        const binary = bytes.reduce((str, b) => str + String.fromCharCode(b), '')
+        const base64 = btoa(binary)
+        try {
+          const res = await fetch('/api/extract-doc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fileBase64: base64, mimeType: file.type, fileName: file.name }),
+          })
+          const data = await res.json()
+          setDocuments(prev => [...prev, {
+            id: Date.now(),
+            name: file.name,
+            category: uploadCategory,
+            content: (data.text || '').slice(0, 8000),
+          }])
+        } catch {
+          alert('Could not extract PDF text. Please use "Paste text instead" to copy your document text manually.')
+        }
+      }
+      reader.readAsArrayBuffer(file)
+    } else {
+      reader.onload = (ev) => {
+        setDocuments(prev => [...prev, {
+          id: Date.now(),
+          name: file.name,
+          category: uploadCategory,
+          content: (ev.target.result || '').slice(0, 8000),
+        }])
+      }
+      reader.readAsText(file)
+    }
   }
 
   function addPastedDoc() {

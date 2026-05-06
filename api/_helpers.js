@@ -209,7 +209,7 @@ Status values: RISK | INFERRED | PROBABLE | CONFIRMED | MONITOR | CLEAR
 Icons: ⚡ electrical, 🔧 plumbing, ⚠ hazards, 🔥 structural/fire, 🏠 roof/exterior, 🌡 heating, ✓ clear`
 }
 
-function buildChatSystem(propertyData, element, userProfile) {
+function buildChatSystem(propertyData, element, userProfile, documents, issueHistory) {
   const a = propertyData?.assessor || {}
   const contactsList = Object.values(BOSTON_CONTACTS).map(cat =>
     `${cat.label}:\n` + cat.providers.map(p => `  • ${p.name} — ${p.phone} (${p.note})`).join('\n')
@@ -218,6 +218,23 @@ function buildChatSystem(propertyData, element, userProfile) {
   const userCtx = userProfile
     ? `\n- User: ${userProfile.role || 'tenant'}${userProfile.floor ? `, Floor/Unit: ${userProfile.floor}` : ''}${userProfile.moveIn ? `, Moved in: ${userProfile.moveIn}` : ''}`
     : ''
+
+  // Uploaded documents — inject full content so AI can quote them
+  let docSection = ''
+  if (documents && documents.length > 0) {
+    docSection = `\n\nUPLOADED DOCUMENTS — reference these directly when the user asks about lease terms, bills, or inspection findings:\n` +
+      documents.map(d => `\n=== ${d.category}: ${d.name} ===\n${d.content}\n=== END ===`).join('\n')
+  }
+
+  // Persistent issue memory — past reports for this address
+  let issueSection = ''
+  if (issueHistory && issueHistory.length > 0) {
+    const lines = issueHistory.slice(-15).map(i => {
+      const date = new Date(i.timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      return `• [${date}] ${i.element} — "${i.issue}" → ${i.responsibility || '?'} responsibility, ${i.urgency || '?'}`
+    }).join('\n')
+    issueSection = `\n\nPAST ISSUE REPORTS (this user's history for this property):\n${lines}\n\nIf the user mentions a problem similar to a past report, acknowledge it explicitly — e.g. "You reported this same issue on [date]. If it's still happening X months later, it may be recurring or getting worse." Be specific about how long ago it was.`
+  }
 
   return `You are Mainten AI — an expert property advisor for Boston residents, powered by Google Gemini. You have deep knowledge of pre-war Boston construction, Massachusetts housing law, tenant rights, and building systems.
 
@@ -231,11 +248,13 @@ HOW TO RESPOND:
 - Answer the user's EXACT question directly and conversationally — like a knowledgeable friend
 - Be specific to this property: pre-war construction, Boston, MA, the building's age and systems
 - Reference Massachusetts law (105 CMR 410) when relevant for landlord responsibility
+- If the user asks about their lease, utility bills, or inspection report — quote directly from the uploaded documents
 - *** CRITICAL: Do NOT include phone numbers, company names, or service provider contacts in your response UNLESS the user explicitly asks "who do I call", "give me a contact", "what number", "who should I hire", or similar phrasing ***
 - When someone describes a problem (leak, pest, noise, mould), explain what it is, why it happens in this building type, and who is responsible — but do NOT jump to giving contacts unprompted
 - Do not start with "Great question!" or similar filler
 - Use **bold** for key points. Use bullet lists when listing multiple items.
 - Keep responses concise (under 180 words) unless the question genuinely needs more detail
+${docSection}${issueSection}
 
 BOSTON SERVICE CONTACTS — only share these when the user explicitly asks for contacts or phone numbers:
 ${contactsList}`
